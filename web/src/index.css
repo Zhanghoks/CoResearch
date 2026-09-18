@@ -1,0 +1,142 @@
+@import 'tailwindcss';
+
+/* ===================================================================
+   Design tokens — ported from Huabu (apps/web/src/index.css) so the
+   CoResearch canvas replicates its visual language 1:1.
+   Naming: fg-* (text), bg-* (surfaces), edge-* (borders).
+   =================================================================== */
+:root {
+  --fg-default: #191919;
+  --fg-muted: #515151;
+  --fg-subtle: #767676;
+  --fg-inverse: #ffffff;
+
+  --bg-default: #f5f5f5;
+  --bg-surface: #ffffff;
+  --bg-hover: #f2f2f2;
+  --bg-inverse: #1f1f1f;
+
+  --edge-default: #e6e6e6;
+
+  --info: #2e90ff;
+  --info-light: #8ac2ff;
+  --info-bg: #f2f8ff;
+
+  --success: #16a34a;
+  --success-bg: #f0fdf4;
+
+  --warning: #d97a2b;
+  --warning-light: #f7c85c;
+  --warning-bg: #fef6e7;
+
+  --danger: #e43636;
+  --danger-bg: #fcf8f8;
+
+  --ai: #bda6ce;
+  --ai-bg: rgba(189, 166, 206, 0.1);
+
+  --question-fg: #d97a2b;
+  --question-bg: #fbe7ad;
+  --question-border: #eec84e;
+
+  --canvas-grid: #cccccc;
+  --shadow-bottom: 0 2px 12px rgba(0, 0, 0, 0.08);
+}
+
+@theme inline {
+  --color-fg-default: var(--fg-default);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-fg-inverse: var(--fg-inverse);
+
+  --color-bg-default: var(--bg-default);
+  --color-surface: var(--bg-surface);
+  --color-hover: var(--bg-hover);
+  --color-inverse: var(--bg-inverse);
+
+  --color-edge-default: var(--edge-default);
+
+  --color-ai: var(--ai);
+  --color-ai-bg: var(--ai-bg);
+
+  --color-danger: var(--danger);
+  --color-danger-bg: var(--danger-bg);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+
+  --color-canvas-grid: var(--canvas-grid);
+  --color-question-fg: var(--question-fg);
+  --color-question-bg: var(--question-bg);
+  --color-question-border: var(--question-border);
+
+  --shadow-bottom: var(--shadow-bottom);
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  width: 100%;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--bg-default);
+  color: var(--fg-default);
+  font: 14px/1.45 -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.react-flow__attribution {
+  color: var(--fg-muted);
+}
+
+.react-flow__controls {
+  --xy-controls-box-shadow: none;
+  --xy-controls-button-background-color: var(--bg-surface);
+  --xy-controls-button-background-color-hover: var(--bg-hover);
+  --xy-controls-button-color: var(--fg-default);
+  --xy-controls-button-border-color: var(--edge-default);
+  border: 1px solid var(--edge-default);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.react-flow__edge.selected path {
+  stroke: var(--color-info) !important;
+  filter: drop-shadow(0 0 2px var(--color-info-light));
+}
+
+/* Connection handles render as a 8px dot (h-2 w-2), but that's too small a
+   target to reliably grab — widen the invisible hit area via a transparent
+   ::after without growing the visible dot, mirroring Huabu's own approach
+   to small drag controls (see NodeWrapper's resize-handle comment). */
+.react-flow__handle {
+  position: relative;
+}
+.react-flow__handle::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 999px;
+}
+*:hover::-webkit-scrollbar-thumb {
+  background-color: var(--edge-default);
+}
