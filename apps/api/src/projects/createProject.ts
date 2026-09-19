@@ -17,16 +17,15 @@
 // the transaction (withRequestContext), so a failure at any step rolls
 // back all three.
 
+import type { CreatedProject } from "@coresearch/shared";
+
 import type { RequestDb } from "../db/index.js";
+
+export type { CreatedProject };
 
 export type CreateProjectInput = {
   userId: string;
   title: string;
-};
-
-export type CreatedProject = {
-  projectId: string;
-  canvasId: string;
 };
 
 export async function createProject(

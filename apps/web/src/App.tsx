@@ -29,7 +29,6 @@ import {
   RouterProvider,
 } from 'react-router-dom'
 
-import { PrototypeApp } from './components/Home/PrototypeApp'
 import { AppLoadingScreen } from './pages/AppLoadingScreen'
 import LoginPage from './pages/LoginPage'
 import ProjectListPage from './pages/ProjectListPage'
@@ -117,7 +116,6 @@ export default function App() {
                     </Suspense>
                   ),
                 },
-                { path: '/prototype', element: <PrototypeApp /> },
                 { path: '*', element: <Navigate to="/" replace /> },
               ],
             },

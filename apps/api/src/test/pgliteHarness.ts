@@ -13,6 +13,8 @@ import { fileURLToPath } from "node:url";
 
 import { PGlite } from "@electric-sql/pglite";
 
+import { _setPoolsForTest, withRequestContext } from "../db/withRequestContext.js";
+
 import type { RequestDb } from "../db/index.js";
 
 const repoRoot = path.resolve(
@@ -51,34 +53,30 @@ export async function createUser(db: PGlite, userId: string): Promise<void> {
 }
 
 /**
- * Run `fn` exactly the way `withRequestContext` does in production —
- * one transaction, `SET LOCAL ROLE coresearch_app`, `SET LOCAL
- * app.current_user_id` — but against PGlite instead of a pg Pool.
- * Pool plumbing is covered separately in withRequestContext.test.ts.
+ * Run `fn` as `userId`, through the REAL `withRequestContext`.
+ *
+ * Deliberately not a re-implementation of the BEGIN / SET LOCAL ROLE /
+ * SET LOCAL app.current_user_id sequence: ADR 0013 makes that sequence
+ * the single fail-closed choke point, and a hand-copy here would keep
+ * passing if production ever gained a step. Instead PGlite is adapted to
+ * the narrow slice of `pg.Pool` that `withRequestContext` uses, and
+ * injected via the escape hatch the module already exports.
  */
 export async function asUser<T>(
   db: PGlite,
   userId: string,
   fn: (db: RequestDb) => Promise<T>,
 ): Promise<T> {
-  await db.exec("BEGIN");
-  try {
-    await db.exec("SET LOCAL ROLE coresearch_app");
-    await db.query("SELECT set_config('app.current_user_id', $1, true)", [
-      userId,
-    ]);
-    const result = await fn(asRequestDb(db));
-    await db.exec("COMMIT");
-    return result;
-  } catch (err) {
-    await db.exec("ROLLBACK");
-    throw err;
-  }
+  _setPoolsForTest({ app: asPool(db) });
+  return withRequestContext({ userId }, fn);
 }
 
-function asRequestDb(db: PGlite): RequestDb {
+/** The slice of `pg.Pool` that `withRequestContext` actually touches. */
+function asPool(db: PGlite) {
   return {
-    query: ((sql: string, params?: unknown[]) =>
-      db.query(sql, params as unknown[])) as RequestDb["query"],
-  };
+    connect: async () => ({
+      query: (sql: string, params?: unknown[]) => db.query(sql, params),
+      release: () => {},
+    }),
+  } as never;
 }

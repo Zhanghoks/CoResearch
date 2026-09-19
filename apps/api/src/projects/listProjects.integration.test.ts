@@ -26,6 +26,32 @@ describe("listProjects", () => {
     assert.equal(projects[0]?.canvasId, created.canvasId);
   });
 
+  it("points at the first canvas created, not an arbitrary one", async () => {
+    // ADR 0003 allows a project to gain a second canvas later (a Deep
+    // Dive board). "Primary" means the one created with the project, so
+    // ordering must be by creation, not by whichever uuid happens to
+    // sort first.
+    const db = await freshDb();
+    await createUser(db, userA);
+    const created = await asUser(db, userA, (tx) =>
+      createProject(tx, { userId: userA, title: "Two canvases" }),
+    );
+
+    // A later canvas whose uuid sorts BEFORE the primary one: with
+    // lexicographic ordering this would hijack the link.
+    await asUser(db, userA, (tx) =>
+      tx.query(
+        `INSERT INTO canvases (id, project_id, title, created_at)
+         VALUES ('00000000-0000-0000-0000-00000000000a'::uuid, $1::uuid, 'Deep dive', now() + interval '1 hour')`,
+        [created.projectId],
+      ),
+    );
+
+    const projects = await asUser(db, userA, (tx) => listProjects(tx));
+
+    assert.equal(projects[0]?.canvasId, created.canvasId);
+  });
+
   it("omits projects belonging to other users", async () => {
     const db = await freshDb();
     await createUser(db, userA);

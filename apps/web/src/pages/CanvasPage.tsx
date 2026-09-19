@@ -43,7 +43,10 @@ export default function CanvasPage() {
   const right = useResizableWidth({ defaultWidth: 380, min: 280, max: 520, anchor: 'right' })
 
   useEffect(() => {
-    if (!canvasId) return
+    if (!canvasId) {
+      setError('缺少画布 id')
+      return
+    }
     let cancelled = false
     setSnapshot(null)
     setError(null)

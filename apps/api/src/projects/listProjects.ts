@@ -5,18 +5,18 @@
 // redundant predicate here would invite the habit of trusting the
 // application filter instead of the policy.
 //
-// ADR 0003 guarantees exactly one primary canvas per project in V1, so
-// the join is 1:1 today. `MIN(id)` keeps it single-valued if a project
-// ever gains a second canvas before the UI can express that.
+// ADR 0003 guarantees exactly one primary canvas per project in V1, but
+// the same ADR anticipates a project gaining a second (Deep Dive) canvas
+// later. "Primary" means the one created alongside the project, so this
+// orders by creation. An earlier version used `MIN(c.id::text)`, which
+// is merely single-valued, not correct: a later canvas whose uuid sorts
+// first would silently hijack the link (see listProjects test).
+
+import type { ProjectSummary } from "@coresearch/shared";
 
 import type { RequestDb } from "../db/index.js";
 
-export type ProjectSummary = {
-  id: string;
-  title: string;
-  canvasId: string | null;
-  createdAt: string;
-};
+export type { ProjectSummary };
 
 export async function listProjects(db: RequestDb): Promise<ProjectSummary[]> {
   const result = await db.query<{
@@ -25,10 +25,15 @@ export async function listProjects(db: RequestDb): Promise<ProjectSummary[]> {
     canvas_id: string | null;
     created_at: string;
   }>(
-    `SELECT p.id, p.title, p.created_at, MIN(c.id::text) AS canvas_id
+    `SELECT p.id,
+            p.title,
+            p.created_at,
+            (SELECT c.id::text
+               FROM canvases c
+              WHERE c.project_id = p.id
+              ORDER BY c.created_at ASC, c.id ASC
+              LIMIT 1) AS canvas_id
        FROM projects p
-       LEFT JOIN canvases c ON c.project_id = p.id
-      GROUP BY p.id, p.title, p.created_at
       ORDER BY p.created_at DESC`,
   );
 

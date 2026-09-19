@@ -1,21 +1,15 @@
 // Project endpoints (docs/spec/02-api-contract.md §1).
 // Shape follows Huabu-main/apps/web/src/api/canvas.ts: one named function
 // per endpoint over the shared `apiFetch`, no fetch calls in components.
+//
+// The request/response types come from @coresearch/shared so the API and
+// this client cannot drift apart.
 
 import { apiFetch } from './_client'
 
-export interface ProjectSummary {
-  id: string
-  title: string
-  /** ADR 0003: the project's single primary canvas in V1. */
-  canvasId: string | null
-  createdAt: string
-}
+import type { CreatedProject, ProjectSummary } from '@coresearch/shared'
 
-export interface CreatedProject {
-  projectId: string
-  canvasId: string
-}
+export type { CreatedProject, ProjectSummary }
 
 export function listProjects(): Promise<ProjectSummary[]> {
   return apiFetch<ProjectSummary[]>('/api/projects', {

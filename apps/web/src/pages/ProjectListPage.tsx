@@ -117,12 +117,6 @@ export default function ProjectListPage() {
           )}
         </div>
 
-        <Link
-          to="/prototype"
-          className="text-fg-muted hover:text-fg-default mt-10 inline-block text-xs underline underline-offset-4"
-        >
-          查看节点与画布原型
-        </Link>
       </div>
     </div>
   )

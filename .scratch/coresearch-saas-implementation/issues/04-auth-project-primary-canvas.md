@@ -46,6 +46,31 @@
 
 新增 `.env.example` 记录全部所需变量。
 
+### Code review 后的修正
+
+两轴 review（standards / spec）跑出 9 条，其中 7 条已改：
+
+**真 bug（两条，review 之前没发现）**
+- `sessionStore.initInFlight` 用 `??=` 缓存了失败：`getSession()` 抛一次之后，后续每次 `init()` 都拿回同一个 resolved-false 的 promise，用户会被永久钉在 `/login`，除非整页刷新。失败时清空缓存。
+- `CanvasPage` 的 `if (!canvasId) return` 让 `snapshot` 停在 `null`，页面无限转圈而不是报错。当前路由下不可达，属于写了一半的 guard，补成报错。
+
+**`MIN(c.id::text)` 不是 primary canvas（两个 reviewer 独立提 + 我自己也标了）**
+它取的是字典序最小的 uuid，跟"哪张是 primary"没关系。ADR 0003 明确预期将来会有第二张 Deep Dive 画布，届时列表会静默链到随机一张、且没有测试会红。已改成按 `created_at ASC` 取第一张（= 跟 project 一起建的那张），并补了一条会红的测试：插一张 `created_at` 更晚但 uuid 排序更靠前的画布，旧实现选错、新实现选对。
+
+**Standards 硬伤（两条）**
+- `CanvasSnapshot.title` 与 CONTEXT.md 的 Canvas 定义冲突：Canvas 不持有研究内容真值，V1 里 `canvases.title` 只是列默认值 `'Main Canvas'`，UI 从来不读它。已删除，只留 `projectTitle`。
+- 三个 wire DTO（`ProjectSummary`/`CreatedProject`/`CanvasSnapshot`）在 API 和 web 各声明一份，**并且已经漂移**（API 写 `nodes: never[]`，web 写 `unknown[]`，没有任何东西发现）。已收进 `packages/shared/src/api/contracts.ts`，两边同源；`never[]` 一并改成更诚实的 `unknown[]`。
+
+**ADR 0013 的 fail-closed 保证被测试替身削弱**
+`pgliteHarness.asUser` 原本手抄了一遍 `BEGIN`/`SET LOCAL ROLE`/`set_config` 序列——生产那条路径要是多一步，测试会静默地不再覆盖它。已改成把 PGlite 适配成 `pg.Pool` 的最小切面，通过既有的 `_setPoolsForTest` 注入，**测试现在跑的是真的 `withRequestContext`**，不是复制品。
+
+**Scope creep：`/prototype` 路由**
+移动 `PrototypeApp.tsx` 是合理的（代码是搬的不是造的），但给它挂路由、在 `HomePage` 加横幅、在项目列表加入口，是 ticket 没要求的新用户界面。路由/横幅/入口已全部撤掉，文件保留但不被引用，去留交给 05 号。顺带效果：entry chunk 从 785 kB 降到 540 kB（seedGraph 不再进入入口图）。
+
+**没改的两条（判断题，记下不做）**
+- `app.ts` 三个 handler 重复 `deps.withRequestContext({userId}, ...)` 外加手写 body 解析。三次重复还没到该抽象的程度（`server.ts` 注释里还有 9 个端点要落在这里，等真到了再抽 `withCaller` + Fastify schema 更合适）。
+- `GET /api/projects/:projectId`（spec §1 有、本 ticket 没要求、没有后续 ticket 认领）。列表已带 `canvasId`，深链能工作，没有消费者。**这是一条会被遗忘的契约缺口，记在这里等需要它的 ticket 认领。**
+
 ### 已知限制
 
-`listProjects` 用 `MIN(c.id::text)` 取 primary canvas。V1 下每个 project 只有一张画布（ADR 0003），所以今天恒等；真要支持多画布时，"哪张是 primary"需要 schema 上的标记，那是新的架构判断，按地图规矩应该回[决策地图](../../coresearch-saas-architecture/map.md)开 ticket，不在实现阶段顺手加字段。
+真正的"primary canvas"目前靠创建顺序推断，schema 里没有标记。要支持多画布时需要显式建模，那是新的架构判断，按地图规矩回[决策地图](../../coresearch-saas-architecture/map.md)开 ticket，不在实现阶段顺手加字段。

@@ -13,23 +13,11 @@
 // are indistinguishable here by construction — the route turns both into
 // 404 so we never confirm that an id exists.
 
+import type { CanvasSnapshot } from "@coresearch/shared";
+
 import type { RequestDb } from "../db/index.js";
 
-export type CanvasSnapshot = {
-  canvasId: string;
-  projectId: string;
-  title: string;
-  /**
-   * The owning project's title. Carried here so a deep link to
-   * /canvas/:canvasId renders its header on a cold load, without the
-   * client having to hold state from the project list it may never
-   * have visited.
-   */
-  projectTitle: string;
-  version: number;
-  nodes: never[];
-  edges: never[];
-};
+export type { CanvasSnapshot };
 
 export async function readCanvas(
   db: RequestDb,
@@ -38,11 +26,10 @@ export async function readCanvas(
   const result = await db.query<{
     id: string;
     project_id: string;
-    title: string;
     project_title: string;
     version: string | number;
   }>(
-    `SELECT c.id, c.project_id, c.title, c.version, p.title AS project_title
+    `SELECT c.id, c.project_id, c.version, p.title AS project_title
        FROM canvases c
        JOIN projects p ON p.id = c.project_id
       WHERE c.id = $1::uuid`,
@@ -55,7 +42,6 @@ export async function readCanvas(
   return {
     canvasId: row.id,
     projectId: row.project_id,
-    title: row.title,
     projectTitle: row.project_title,
     // bigint arrives as a string over the wire; the canvas version is a
     // counter the client compares against delta versions, so it must be

@@ -1,6 +1,5 @@
 import { addEdge, useNodesState, useEdgesState, type NodeMouseHandler, type OnConnect } from '@xyflow/react'
 import { useCallback, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 
 import { initialNodes, initialEdges, type CrEntityNode } from '../../data/seedGraph'
 import { buildVisualEdge } from '../../lib/edgeVisual'
@@ -17,11 +16,12 @@ import { NodeIntroPage } from './NodeIntroPage'
 /**
  * The original static prototype: seed graph, node gallery, intro pages.
  *
- * It is no longer the app's front door — the real, API-backed flow
- * (login → ProjectsPage → ProjectCanvasPage) is. This is kept reachable
- * because ticket 05 ("Note 编辑 → DB → Realtime") is the slice that
- * replaces `data/seedGraph.ts` with real API data, and deleting the
- * reference design before then would lose the layout work it encodes.
+ * NOT routed. The real flow (login → /projects → /canvas/:id) replaced
+ * it as the app's front door, and shipping a seeded fake-data page as
+ * user-facing surface was not part of ticket 04. The file is kept —
+ * unreferenced — because ticket 05 ("Note 编辑 → DB → Realtime") is the
+ * slice that replaces `data/seedGraph.ts` with real API data, and that
+ * slice should decide whether this layout work gets ported or deleted.
  */
 
 /** Which canvas node each node type maps to — used by NodeIntroPage's "view in canvas". */
@@ -30,7 +30,6 @@ const CANVAS_NODE_BY_KIND = new Map<ResearchEntityKind, string>(
 )
 
 export function PrototypeApp() {
-  const navigate = useNavigate()
   const [project, setProject] = useState<{ title: string; focusNodeId: string | null } | null>(null)
   const [introKind, setIntroKind] = useState<ResearchEntityKind | null>(null)
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
@@ -90,14 +89,7 @@ export function PrototypeApp() {
     )
   }
 
-  if (!project)
-    return (
-      <HomePage
-        onOpenProject={openProject}
-        onViewNode={setIntroKind}
-        onExit={() => void navigate('/projects')}
-      />
-    )
+  if (!project) return <HomePage onOpenProject={openProject} onViewNode={setIntroKind} />
 
   return (
     <div className="flex h-full w-full flex-col">

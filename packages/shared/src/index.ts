@@ -1,3 +1,4 @@
+export * from "./api/contracts.js";
 export * from "./canvas/execution.js";
 export * from "./canvas/command.js";
 export * from "./canvas/node.js";

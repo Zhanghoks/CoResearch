@@ -54,6 +54,11 @@ export const useSessionStore = create<SessionState>((set) => ({
         set({ session: data.session, isReady: Boolean(data.session) })
         return Boolean(data.session)
       } catch (err) {
+        // Clear the cached promise so a transient failure (offline at
+        // startup, Supabase blip) can be retried. Leaving it set would
+        // park the user on /login until a full page reload, because
+        // `??=` would keep handing back this same resolved-false promise.
+        initInFlight = null
         set({ error: err instanceof Error ? err.message : String(err) })
         return false
       } finally {
