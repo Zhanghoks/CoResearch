@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { executeCanvas, getCanvas, getCanvasDeltas, type CanvasSnapshot } from '../api/canvas'
+import { acceptCandidate } from '../api/candidates'
 import { ApiError } from '../api/_client'
 import { Canvas, type CanvasNode } from '../components/Canvas/Canvas'
 import { Header } from '../components/Layout/Header'
@@ -254,12 +255,35 @@ export default function CanvasPage() {
                 },
               ])
             }}
+            onCandidateDrop={(candidate, position) => {
+              if (!canvasId) return
+              void acceptCandidate(
+                snapshot.projectId,
+                candidate.candidateId,
+                canvasId,
+                position,
+              )
+                .then((result) => {
+                  if (result.deltas.length > 0) {
+                    applyRemoteDeltas(asDeltas(result.deltas), result.version)
+                  } else {
+                    versionRef.current = result.version
+                  }
+                })
+                .catch((err: unknown) => {
+                  setError(err instanceof Error ? err.message : String(err))
+                })
+            }}
           />
         </div>
         {!isRightCollapsed && (
           <div style={{ width: right.width }} className="relative shrink-0">
             <ResizeHandle side="left" {...right.handleProps} isResizing={right.isResizing} />
-            <RightPanel selectedNode={null} detailRequested={0} />
+            <RightPanel
+              selectedNode={null}
+              detailRequested={0}
+              projectId={snapshot.projectId}
+            />
           </div>
         )}
       </div>

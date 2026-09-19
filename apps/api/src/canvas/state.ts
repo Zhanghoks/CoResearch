@@ -7,6 +7,7 @@ import {
   type CanvasNode,
   type Delta,
 } from "@coresearch/engine";
+import { nativeDataForCrEntity } from "@coresearch/research";
 import type { WireCanvasNode } from "@coresearch/shared";
 
 import type { RequestDb } from "../db/index.js";
@@ -201,6 +202,8 @@ async function insertNode(
   opts: { deferParent?: boolean } = {},
 ): Promise<void> {
   const wire = toWireNode(node);
+  const native =
+    wire.type === "crEntity" ? nativeDataForCrEntity(wire.data) : wire.data;
   await db.query(
     `INSERT INTO canvas_nodes (id, canvas_id, node_type, parent_node_id, native_data)
      VALUES ($1::uuid, $2::uuid, $3, $4, $5::jsonb)`,
@@ -209,7 +212,7 @@ async function insertNode(
       canvasId,
       wire.type,
       opts.deferParent ? null : (wire.parentId ?? null),
-      JSON.stringify(wire.data),
+      JSON.stringify(native),
     ],
   );
   await db.query(
@@ -232,6 +235,8 @@ async function replaceNode(
   node: CanvasNode,
 ): Promise<void> {
   const wire = toWireNode(node);
+  const native =
+    wire.type === "crEntity" ? nativeDataForCrEntity(wire.data) : wire.data;
   await db.query(
     `UPDATE canvas_nodes
         SET node_type = $2, parent_node_id = $3, native_data = $4::jsonb, updated_at = now()
@@ -240,7 +245,7 @@ async function replaceNode(
       wire.id,
       wire.type,
       wire.parentId ?? null,
-      JSON.stringify(wire.data),
+      JSON.stringify(native),
       canvasId,
     ],
   );

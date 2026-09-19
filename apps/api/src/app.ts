@@ -14,8 +14,17 @@ import { listProjects } from "./projects/listProjects.js";
 import { executeOnCanvas } from "./canvas/executeOnCanvas.js";
 import { readCanvas } from "./canvas/readCanvas.js";
 import { readDeltas } from "./canvas/readDeltas.js";
+import {
+  AcceptNotFoundError,
+  acceptCandidate,
+} from "./research/acceptCandidate.js";
+import {
+  ProjectNotFoundError,
+  insertFixtureCandidate,
+  listCandidates,
+} from "./research/candidates.js";
 
-import type { CanvasCommand } from "@coresearch/shared";
+import type { AcceptCandidateBody, CanvasCommand } from "@coresearch/shared";
 
 import type { RequestContext, RequestDb } from "./db/index.js";
 
@@ -79,6 +88,73 @@ export function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): Fastif
         listProjects(db),
       );
     });
+
+    api.get("/api/projects/:projectId/candidates", async (request, reply) => {
+      const { projectId } = request.params as { projectId: string };
+      const candidates = await deps.withRequestContext(
+        { userId: request.userId },
+        (db) => listCandidates(db, projectId),
+      );
+      return { candidates };
+    });
+
+    api.post("/api/projects/:projectId/candidates/fixture", async (request, reply) => {
+      const { projectId } = request.params as { projectId: string };
+      try {
+        const candidate = await deps.withRequestContext(
+          { userId: request.userId },
+          (db) => insertFixtureCandidate(db, projectId),
+        );
+        return reply.code(201).send(candidate);
+      } catch (err) {
+        if (err instanceof ProjectNotFoundError) {
+          return reply.code(404).send({ error: "project not found" });
+        }
+        throw err;
+      }
+    });
+
+    api.post(
+      "/api/projects/:projectId/candidates/:candidateId/accept",
+      async (request, reply) => {
+        const { projectId, candidateId } = request.params as {
+          projectId: string;
+          candidateId: string;
+        };
+        const body = (request.body ?? {}) as Partial<AcceptCandidateBody>;
+        const canvasId = body.canvasId;
+        const position = body.placement?.position;
+        if (
+          typeof canvasId !== "string" ||
+          typeof position?.x !== "number" ||
+          typeof position?.y !== "number"
+        ) {
+          return reply.code(400).send({
+            error: "canvasId and placement.position are required",
+          });
+        }
+        try {
+          return await deps.withRequestContext(
+            { userId: request.userId },
+            (db) =>
+              acceptCandidate(db, {
+                projectId,
+                candidateId,
+                canvasId,
+                placement: {
+                  parentNodeId: body.placement?.parentNodeId,
+                  position,
+                },
+              }),
+          );
+        } catch (err) {
+          if (err instanceof AcceptNotFoundError) {
+            return reply.code(404).send({ error: err.message });
+          }
+          throw err;
+        }
+      },
+    );
 
     api.get("/api/canvases/:canvasId", async (request, reply) => {
       const { canvasId } = request.params as { canvasId: string };

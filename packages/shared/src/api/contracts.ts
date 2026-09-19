@@ -96,3 +96,41 @@ export interface CanvasDeltaLogEntry {
 export interface CanvasDeltaLog {
   entries: CanvasDeltaLogEntry[];
 }
+
+/** Wire shape of a Track A candidate (docs/spec/04 §3). */
+export interface CandidatePart {
+  type: "research_candidate";
+  candidateId: string;
+  schemaVersion: 1;
+  kind: string;
+  payload: unknown;
+  provenance: {
+    runId: string;
+    messageId: string;
+    derivedFrom?: string[];
+    asOf?: string;
+  };
+  materialized?: { entityId: string; at: string };
+}
+
+export interface CandidateList {
+  candidates: CandidatePart[];
+}
+
+/** Body of `POST /api/projects/:projectId/candidates/:candidateId/accept`. */
+export interface AcceptCandidateBody {
+  canvasId: string;
+  placement: {
+    parentNodeId?: string;
+    position: { x: number; y: number };
+  };
+}
+
+export interface AcceptCandidateResult {
+  entityId: string;
+  nodeId: string;
+  alreadyMaterialized: boolean;
+  version: number;
+  fromVersion: number;
+  deltas: unknown[];
+}

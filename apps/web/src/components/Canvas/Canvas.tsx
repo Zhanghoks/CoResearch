@@ -16,7 +16,10 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useRef } from 'react'
 
+import type { CandidatePart } from '@coresearch/shared'
+
 import type { CrEntityNode as CrEntityNodeType, FrameNode as FrameNodeType } from '../../data/seedGraph'
+import { CANDIDATE_MIME } from '../Candidates/CandidateCard'
 import { CrEntityNode } from '../Nodes/CrEntityNode'
 import { FrameNode } from '../Nodes/FrameNode'
 import { NoteNode, type NoteFlowNode } from '../Nodes/NoteNode'
@@ -36,6 +39,7 @@ interface CanvasProps<N extends Node = CanvasNode> {
   onNodeClick: NodeMouseHandler<N>
   onNodeDoubleClick: NodeMouseHandler<N>
   onPaneDoubleClick?: (position: { x: number; y: number }) => void
+  onCandidateDrop?: (candidate: CandidatePart, position: { x: number; y: number }) => void
   onNodeDragStop?: OnNodeDrag<N>
   onNodesDelete?: OnNodesDelete<N>
 }
@@ -50,6 +54,7 @@ export function Canvas<N extends Node = CanvasNode>({
   onNodeClick,
   onNodeDoubleClick,
   onPaneDoubleClick,
+  onCandidateDrop,
   onNodeDragStop,
   onNodesDelete,
 }: CanvasProps<N>) {
@@ -69,6 +74,24 @@ export function Canvas<N extends Node = CanvasNode>({
         onNodeDoubleClick={onNodeDoubleClick}
         onNodeDragStop={onNodeDragStop}
         onNodesDelete={onNodesDelete}
+        onDragOver={(event) => {
+          if (!onCandidateDrop) return
+          if (event.dataTransfer.types.includes(CANDIDATE_MIME)) {
+            event.preventDefault()
+            event.dataTransfer.dropEffect = 'copy'
+          }
+        }}
+        onDrop={(event) => {
+          if (!onCandidateDrop || !rf.current) return
+          const raw = event.dataTransfer.getData(CANDIDATE_MIME)
+          if (!raw) return
+          event.preventDefault()
+          const candidate = JSON.parse(raw) as CandidatePart
+          onCandidateDrop(
+            candidate,
+            rf.current.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+          )
+        }}
         onPaneClick={(event) => {
           if (!onPaneDoubleClick || !rf.current) return
           const now = Date.now()
@@ -98,7 +121,7 @@ export function Canvas<N extends Node = CanvasNode>({
         <Controls showInteractive={false} />
       </ReactFlow>
       <div className="text-fg-subtle pointer-events-none absolute bottom-3 left-3 text-[11px]">
-        双击空白处新建笔记 · 拖动移动 · Delete 删除
+        双击空白处新建笔记 · 从右侧拖入候选 · Delete 删除
       </div>
     </div>
   )

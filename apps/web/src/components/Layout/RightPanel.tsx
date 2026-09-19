@@ -2,19 +2,22 @@ import clsx from 'clsx'
 import { Link2, Send, Sparkles } from 'lucide-react'
 import { useEffect, useState } from 'react'
 
+import { createFixtureCandidate, listCandidates, type CandidatePart } from '../../api/candidates'
 import { getAccentTokens, resolveAccent } from '../../lib/accent'
 import { NODE_VISUALS } from '../../lib/nodeVisuals'
 import type { CrEntityNode } from '../../data/seedGraph'
+import { CandidateCard } from '../Candidates/CandidateCard'
 import { SeedDetailPanel } from './SeedDetailPanel'
 
 interface RightPanelProps {
   selectedNode: CrEntityNode | null
   detailRequested: number
+  projectId?: string
 }
 
 // Detail Surface section order, ported from
 // docs/design/canvas/huabu-node-presentation-and-links.md §6.
-export function RightPanel({ selectedNode, detailRequested }: RightPanelProps) {
+export function RightPanel({ selectedNode, detailRequested, projectId }: RightPanelProps) {
   const [tab, setTab] = useState<'chat' | 'detail'>('chat')
 
   useEffect(() => {
@@ -38,12 +41,48 @@ export function RightPanel({ selectedNode, detailRequested }: RightPanelProps) {
         ))}
       </div>
 
-      {tab === 'chat' ? <ChatTab node={selectedNode} /> : <DetailTab node={selectedNode} />}
+      {tab === 'chat' ? (
+        <ChatTab node={selectedNode} projectId={projectId} />
+      ) : (
+        <DetailTab node={selectedNode} />
+      )}
     </div>
   )
 }
 
-function ChatTab({ node }: { node: CrEntityNode | null }) {
+function ChatTab({
+  node,
+  projectId,
+}: {
+  node: CrEntityNode | null
+  projectId?: string
+}) {
+  const [candidates, setCandidates] = useState<CandidatePart[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!projectId) return
+    let cancelled = false
+    listCandidates(projectId)
+      .then(async (listed) => {
+        if (cancelled) return
+        if (listed.candidates.length > 0) {
+          setCandidates(listed.candidates)
+          return
+        }
+        const fixture = await createFixtureCandidate(projectId)
+        if (!cancelled) setCandidates([fixture])
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : String(err))
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId])
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex-1 overflow-y-auto p-3 text-[12.5px]">
@@ -55,6 +94,12 @@ function ChatTab({ node }: { node: CrEntityNode | null }) {
             ? `Selected "${node.data.title}". Ask me to expand, connect, or draft a hypothesis from this ${node.data.entityKind}.`
             : 'Select a node on the canvas to bring it into context, or ask a question about the research space.'}
         </div>
+        {loadError ? <p className="text-danger mb-2">{loadError}</p> : null}
+        {candidates.map((candidate) => (
+          <div key={candidate.candidateId} className="mb-2">
+            <CandidateCard candidate={candidate} />
+          </div>
+        ))}
       </div>
       <div className="border-edge-default border-t p-2">
         <div className="bg-bg-default border-edge-default flex items-end gap-1.5 rounded-lg border p-1.5">
