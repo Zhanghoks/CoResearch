@@ -36,7 +36,9 @@ Milestone 1 = 07 + 08 都绿
 
 ## Decisions so far
 
-- [01](issues/01-monorepo-and-locked-schema.md) resolved：pnpm workspace + 锁定的 15 张表 migration 在托管项目 `bpxlnucpdmunyvwjpjov` 上跑通。Frontier 现在是 [02](issues/02-canvas-engine-core.md) 和 [03](issues/03-request-context-and-rls.md)，可并行。
+- [01](issues/01-monorepo-and-locked-schema.md) resolved：pnpm workspace + 锁定的 15 张表 migration 在托管项目 `bpxlnucpdmunyvwjpjov` 上跑通。
+- [02](issues/02-canvas-engine-core.md) resolved：`packages/engine` 移植 executor + CREATE_NODES/DELETE_NODES + delta/invert + preAssignIds，测试 10/10。
+- [03](issues/03-request-context-and-rls.md) resolved：`withRequestContext` + 15 张表 RLS 已应用到托管项目；跨租户查询被拦。Frontier 现在是 [04](issues/04-auth-project-primary-canvas.md)。
 
 ## Not yet specified
 
