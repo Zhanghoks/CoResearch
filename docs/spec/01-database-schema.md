@@ -2,6 +2,8 @@
 
 来源：[决策地图](../../.scratch/coresearch-saas-architecture/map.md) 全部 22 条决策，主要是 ADR 0003/0004/0005/0008/0009/0010/0011/0013 与 ticket 09/12/13/18/19。本文只做拼装和补齐字段级细节，不引入新的架构判断——拼装过程中发现的两处需要显式记录的简化，标在对应表下面。
 
+> **实现时的顺序修正**：本文档按"概念分组"排列表（Research Domain 在 §2，Agent Worker 在 §4），但 `research_entities.source_candidate_id` 引用 `agent_messages(id)`——按本文档的章节顺序建表会失败（`agent_messages` 还不存在）。实际的 `supabase/migrations/00000000000001_init.sql` 已经按依赖顺序重排（Agent Worker 表先建），并把这条外键拆成建表之后的 `ALTER TABLE ADD CONSTRAINT`。照 migration 文件的顺序执行，不要照本文档的章节顺序手动敲。
+
 不属于本文范围、需要单独一轮设计的：`papers`/`usage_ledger`/`blobs` 三张表在原草稿里提到过但从未被任何 ticket 完整定义字段——下面给的是**最小可用的第一版**，不是决策，阶段二后续或实现时可以直接改，不需要走 wayfinder。
 
 ## 0. 身份与角色（[ADR 0001](../adr/0001-hybrid-backend-supabase-as-infra.md)/[0013](../adr/0013-rls-policy-pattern.md)）

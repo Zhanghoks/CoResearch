@@ -1,0 +1,18 @@
+{
+  "name": "coresearch",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev:web": "pnpm --filter @coresearch/web dev",
+    "dev:api": "pnpm --filter @coresearch/api dev",
+    "dev:worker": "pnpm --filter @coresearch/worker dev",
+    "build": "pnpm -r --if-present run build",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "test": "pnpm -r --if-present run test",
+    "lint": "pnpm -r --if-present run lint"
+  },
+  "packageManager": "pnpm@11.9.0"
+}

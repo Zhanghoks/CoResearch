@@ -1,0 +1,24 @@
+{
+  "name": "@coresearch/worker",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/runLoop.ts",
+    "build": "tsc -b",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@coresearch/research": "workspace:*",
+    "@coresearch/shared": "workspace:*",
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/pg": "^8.11.0",
+    "tsx": "^4.19.0",
+    "typescript": "~6.0.2"
+  }
+}
