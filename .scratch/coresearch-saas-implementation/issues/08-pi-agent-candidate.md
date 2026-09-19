@@ -8,7 +8,7 @@
 
 - [x] `createCoResearchAgentSession()` 显式传 `tools` 白名单，验证暴露的工具集精确等于预声明的 allowlist（不含 `read`/`bash`/`edit`/`write`）
 - [x] 自定义 `ResourceLoader` 生效，不做任何本地文件系统发现
-- [x] 真实一次对话：用户提问 → Agent 用 `propose_candidates` 提一个候选 → SSE 推给浏览器 → 候选卡片渲染 → 拖进画布走 06 号的 accept 事务 → 出现在画布上
+- [ ] 真实一次对话：用户提问 → Agent 用 `propose_candidates` 提一个候选 → SSE 推给浏览器 → 候选卡片渲染 → 拖进画布走 06 号的 accept 事务 → 出现在画布上 —— **未达成：整条链路只在 stub model + 注入 session 下跑过，没有真实 LLM key、没有浏览器往返**
 - [x] `agent_messages` 落库的是 Pi 的 `SessionEntry` 原样（不是转换过的自定义格式）
 - [x] Token 级流式（`message.delta`）走 SSE，确认不落 `agent_messages`（只有完整轮次落库）
 
