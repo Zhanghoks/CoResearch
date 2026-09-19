@@ -1,5 +1,7 @@
 # CoResearch × Huabu：研究空间与领域对象映射
 
+> **注（2026-09-19）**：本文写于 SaaS 架构决策地图之前，整体交互思路和 §5/§6/§8 的写入路径原则和后续 ADR 高度一致（"Frame 组织视图不推断领域类型"这条和 [ADR 0010](../../adr/0010-restore-structured-frame-layout.md) 的 Hard Rule 字面一致），基本不需要改。三处需要更新：(1) `spaceId` 全部改读 `canvasId`（[ticket 08](../../../.scratch/coresearch-saas-architecture/issues/08-space-canvas-terminology-disambiguation.md) 的 Space/Canvas 消歧，本文写的"Space"在新术语里是 Canvas，不要和 `docs/design/space.md` 的 Idea Meta Space 混淆）；(2) §2 提到的"外部 ACP Agent"路径已明确不在 V1 范围（只保留内置 Agent）；(3) §2"Agent 创建/编辑/移动/连接/删除画布内容"这条能力已被 [ADR 0007](../../adr/0007-agent-tool-set-drops-canvas-commands.md) 收窄——V1 的 Agent 没有任何画布命令工具，不能直接操作画布内容。当前真值见 [CONTEXT.md](../../../CONTEXT.md) 和决策地图。
+
 - 日期：2026-09-18。
 - 状态：交互升级提案；尚未迁移实现。附件中的删除 HTML、替换页面等内容作为设计建议处理，不作为删除现有代码的指令。
 - 上游：[研究画布架构](./research-canvas.md)、[源码逆向记录](./huabu-reverse-engineering.md)、[Research Flow](../research-flow.md)。
@@ -8,9 +10,9 @@
 
 ## 1. 变化是什么
 
-现有方案将画布定义为流程总览。本提案将 Research Space 提升为持续的研究交互入口：用户在节点、Frame 与侧栏中阅读、追问、修改草稿和确认版本。Conversation 承担探索，Canvas 只保存用户认可的对象，见 [Research Flow](../research-flow.md)。
+现有方案将画布定义为流程总览。本提案将 Research Canvas 提升为持续的研究交互入口：用户在节点、Frame 与侧栏中阅读、追问、修改草稿和确认版本。Conversation 承担探索，Canvas 只保存用户认可的对象，见 [Research Flow](../research-flow.md)。
 
-Step 仍是领域流程与完成条件，但不必对应独立网页。Seed、Direction、Paper、Research Question、Problem、Hypothesis、Approach、Method、Evaluation 和 Idea 可以同时出现在一个项目的默认 Space 中。V1 一个 Project 对应一个默认 Space；实体身份不绑定这个数量约束，以便同一论文或想法出现在多个视图中。
+Step 仍是领域流程与完成条件，但不必对应独立网页。Seed、Direction、Paper、Research Question、Problem、Hypothesis、Approach、Method、Evaluation 和 Idea 可以同时出现在一个项目的默认 Canvas 中。V1 一个 Project 对应一个默认 Canvas（[ADR 0003](../../adr/0003-project-canvas-cardinality.md)：schema 支持 1:N，V1 只激活 1 个）；实体身份不绑定这个数量约束，以便同一论文或想法出现在多个视图中。
 
 研究对象仍由 Research Domain 保存。画布独立保存布局、视口和个人批注；绑定层负责把研究修改送进领域服务，并把提交结果投影回画布。画布因此既是交互入口，也是领域状态的呈现。
 
@@ -55,7 +57,7 @@ Frame 组织视图，不根据父 Frame 自动推断领域类型。把论文拖�
 interface ResearchCanvasBinding {
   id: string
   projectId: string
-  spaceId: string
+  canvasId: string   // 原写 spaceId，见 ticket 08 的 Space/Canvas 消歧
   canvasObjectId: string
   objectType: 'node' | 'edge' | 'frame'
   entityKind: string

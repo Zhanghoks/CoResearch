@@ -2,13 +2,15 @@
 
 本仓库的产品设计入口。`web/` 是画布原型；这里是已拍板的产品与领域设计。
 
+**架构真值优先级**：SaaS 化改装（多租户、Supabase、Postgres Research Domain）之后，[CONTEXT.md](../CONTEXT.md)、决策地图 [`.scratch/coresearch-saas-architecture/map.md`](../.scratch/coresearch-saas-architecture/map.md) 和 [docs/adr/](./adr/) 是架构层面的最新真值。下面列的产品/领域设计文档里，[Workspace](./design/workspace.md) 和 [研究画布](./design/canvas/research-canvas.md) 部分内容已被取代（文中标了 `> **Superseded**` 的段落），领域流程（Research Flow、Idea Formation、Idea 结构）本身不受影响。
+
 ## 先读
 
 1. [Research Flow](./design/research-flow.md) — **产品流程真值**。从模糊兴趣到可版本化 Idea，以及 Conversation / Canvas 两条通道。
 2. [Idea Formation](./design/idea-formation/README.md) — 各步实现级契约（输入输出、Gate、revision）。与 Flow 冲突时以 Flow 为准。
-3. [研究画布](./design/canvas/research-canvas.md) — Canvas 架构、命令模型、与 Huabu 的取舍。
-4. [Workspace](./design/workspace.md) — 研究状态如何落盘。
-5. [Space](./design/space.md) — Research Wiki 与 Idea Meta Space。
+3. [研究画布](./design/canvas/research-canvas.md) — Canvas 架构、命令模型、与 Huabu 的取舍。**存储/传输部分已被 SaaS 架构地图取代，见文中 Superseded 标注**。
+4. [Workspace](./design/workspace.md) — 研究状态如何落盘。**目录结构部分已被 Postgres 架构取代，实体/关系建模思路仍成立，见文中 Superseded 标注**。
+5. [Space](./design/space.md) — Research Wiki 与 Idea Meta Space（与画布运行时边界"Canvas"是两个不同概念，见 [ticket 08](../.scratch/coresearch-saas-architecture/issues/08-space-canvas-terminology-disambiguation.md)）。
 6. [Idea 结构](./design/idea-structure.md) — Idea 身份、十维、Proposal、版本。
 
 ## 产品原则

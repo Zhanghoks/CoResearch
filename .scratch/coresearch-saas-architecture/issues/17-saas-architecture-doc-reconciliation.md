@@ -1,7 +1,7 @@
 # 旧设计文档回写：标记 superseded 并对齐新架构基线
 
 Type: task
-Status: open
+Status: resolved
 
 ## Question
 
@@ -26,3 +26,17 @@ Status: open
 5. 完成后在本 ticket 的 Answer 里列出实际改了哪些文件、哪些段落判断不了留给了地图。
 
 这个 ticket 不阻塞 09/10/13/18/19/20/21 的决策工作（互相独立），但**阶段二开始生成实现级 spec 之前必须完成**——不然 spec 编写者会同时读到两套互相矛盾的"权威文档"。
+
+## Answer
+
+实际改动的文件：
+
+- **`docs/design/canvas/research-canvas.md`**：顶部加整体 Superseded 提示；§2.3（Agent `space_commands` 工具→已按 [ADR 0007](../../docs/adr/0007-agent-tool-set-drops-canvas-commands.md) 去掉）、§2.6（存储形状→Postgres，[ADR 0001](../../docs/adr/0001-hybrid-backend-supabase-as-infra.md)/[0002](../../docs/adr/0002-canvas-concurrency-and-realtime-sync.md)）、§3（`space.json`→`research_entities`）、§6（包结构→API/Worker 两进程，[ADR 0006](../../docs/adr/0006-agent-worker-pi-coding-agent-sdk.md)）、§7（数据流图→Postgres 表 + Supabase Realtime）、§11（"不照抄结构化求解器"→已被 [ADR 0010](../../docs/adr/0010-restore-structured-frame-layout.md) 推翻）逐段加 `> **Superseded**` 标注，原文保留。§4 的节点类型表（`crEntity`/`frame`/`note`/`question`/`pdf`/`web`）和 Step 泳道 `layout:'column'` 反而和最终决策一致，未改。
+- **`docs/design/workspace.md`**：顶部加整体 Superseded 提示，明确"第 4 节的实体/关系建模思路仍是 `research_entities`/`research_relations` 的概念来源"；§2/§3/§6/§8 的目录结构/四层表/`.coresearch/`/artifacts 段落加 Superseded 标注；§5/§7 的 skill 组织加注（核实 Huabu 实际 skills 系统是内置 prompt 目录，不是可挂载扩展，[ticket 16](16-agent-extension-architecture.md)）；§10 核心结论改写并保留原句对照。
+- **`docs/design/canvas/huabu-domain-binding.md`**：顶部加注（三处：`spaceId`→`canvasId`、外部 ACP 不在 V1 范围、Agent 画布操作能力已被 [ADR 0007](../../docs/adr/0007-agent-tool-set-drops-canvas-commands.md) 收窄）；`ResearchCanvasBinding.spaceId` 改名 `canvasId`；正文两处"Research Space"/"默认 Space"改成"Research Canvas"/"默认 Canvas"。本文其余部分（§5/§6/§8 的写入路径、确认边界）核对后和后续 ADR 高度一致，未改——"Frame 组织视图不推断领域类型"这条和 [ADR 0010](../../docs/adr/0010-restore-structured-frame-layout.md) 的 Hard Rule 字面一致，算是提前验证了后续决策的合理性。
+- **`docs/design/canvas/huabu-reverse-engineering.md`**：命令集"8 条"更新为"9 条"（[ADR 0010](../../docs/adr/0010-restore-structured-frame-layout.md) 恢复 `SET_FRAME_LAYOUT`），两处代码注释同步。
+- **`docs/README.md`**、**`docs/design/README.md`**：加架构真值优先级说明，指向 `CONTEXT.md`/`.scratch/coresearch-saas-architecture/map.md`/`docs/adr/`；对应文档条目标注哪些部分已被取代。
+
+**全仓库扫过一遍**裸的 `spaceId`/`space.json`/`GET /spaces/...`（含 `.scratch/`、`CONTEXT.md`）：`ADR 0002`/[ticket 05](05-canvas-realtime-sync-strategy.md)/[ticket 12](12-candidate-acceptance-flow-and-canvas-projection-lifecycle.md) 里的 `GET /spaces/:canvasId/deltas` 已经在 18/22 号讨论过程中顺手改成了 `GET /api/canvases/:canvasId/deltas`；`huabu-domain-binding.md` 的 `spaceId` 是本 ticket 改的；`huabu-reverse-engineering.md` 和 `CONTEXT.md` 里剩下的 `space.json` 提及都是在明确对比"Huabu 自己的 space.json 是什么"，不是对 CoResearch 自身存储的误导性描述，不需要改。
+
+**判断不了、留给未来的**：`docs/design/workspace.md` §7 的 skill 目录组织形态（`packages/skills/<name>/`）要不要照搬，还是用别的组织方式——没有对应 ticket，已在文中加注标记为开放问题，不属于本 ticket 的架构回写范围。

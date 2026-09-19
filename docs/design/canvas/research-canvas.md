@@ -1,5 +1,7 @@
 # CoResearch 研究画布：架构设计
 
+> **⚠️ 部分内容已被 SaaS 架构决策地图取代**（2026-09-19 起）。本文写于"独立仓、本地文件系统落盘"的假设下；CoResearch 现在是多租户 SaaS，真值落在 Postgres（Supabase 托管），不是 `research/` 目录或 `space.json`。命令模型、托管字段所有权、投影用普通命令这几条核心思路**原样成立**，是这次改装直接沿用的部分；存储形状、Agent 工具名、数据流图这几处需要按下面标了 `> **Superseded**` 的地方读最新版本。完整、经核实的当前真值见仓库根目录 [CONTEXT.md](../../../CONTEXT.md)、决策地图 [`.scratch/coresearch-saas-architecture/map.md`](../../../.scratch/coresearch-saas-architecture/map.md) 和 [docs/adr/](../../adr/)。本文其余部分保留作为"当初为什么这么设计"的记录，不删除。
+
 - 日期：2026-09-18
 - 状态：设计提案；**替代此前的 tldraw 方案**（`tldraw-research-canvas.md` 已删除）。本次不安装依赖、不写代码。
 - 参考实现：`/Users/zmj/Desktop/Huabu`（microsoft/Huabu，MIT）——下文引用的文件路径均相对该仓库。
@@ -44,6 +46,8 @@ executor → 校验、应用、trace、快照、后效
 
 ### 2.3 Agent 走同一命令 schema
 
+> **Superseded**：Agent **不**暴露任何画布命令工具——两轨模型（Candidate/Proposal）定下来后，Agent 没有合法场景需要直接发画布命令，见 [ADR 0007](../../adr/0007-agent-tool-set-drops-canvas-commands.md)。下文"逐条结果可见""新建 id 回传"这两条性质原样保留，只是现在体现在 `propose_candidates`/`propose_revision`（[ADR 0004](../../adr/0004-candidate-vs-proposal-two-track-model.md)）和 accept 事务（[ADR 0005](../../adr/0005-candidate-acceptance-transaction-shape.md)）上，不是一个叫 `space_commands` 的工具。
+
 Agent 只暴露一个 `space_commands` 工具，参数 schema 从共享 Zod 契约生成。两条性质让 Agent 循环自纠错：
 
 - **逐条结果可见**：每条命令返回 `applied` 和失败时的类型化 `reason`（如 `CONNECT_NODES → invalid-target`）。整批被拒就是 no-op，版本不变。
@@ -66,6 +70,8 @@ Huabu 有两处现成的"这个字段不归画布命令管"的机制：
 `world-previews.ts` 的做法值得照抄：系统协调只表达为普通的 `CREATE_NODES` / `CONNECT_NODES` / `DELETE_NODES` 批次，协调器自己负责选择扩展、生命周期、顺序和补偿。CoResearch 的投影器同样**不新增命令类型**，只用 `source: 'system'` 的普通批次——这样撤销、delta、同步、action log 全部自动复用。
 
 ### 2.6 存储与技术栈
+
+> **Superseded**：下面这套文件存储形状是 Huabu 原版的，CoResearch 是 Postgres SaaS，不落文件系统。当前 schema 是 `canvases`/`canvas_nodes`/`canvas_layout`/`canvas_edges`/`canvas_projections`/`canvas_deltas`（[ADR 0008](../../adr/0008-canvas-canonical-storage-unified-nodes.md)/[0010](../../adr/0010-restore-structured-frame-layout.md)），字节走 Supabase Storage。CAS 版本/每 Canvas 一把写锁这两条原则保留，但锁是 Postgres 咨询锁不是进程内锁（[ADR 0002](../../adr/0002-canvas-concurrency-and-realtime-sync.md)）。
 
 存储形状（`docs/architecture/canvas-storage.md`）：
 
@@ -99,7 +105,7 @@ Huabu 有两处现成的"这个字段不归画布命令管"的机制：
 
 ## 3. 关键差异：Huabu 的画布是真值，CoResearch 的画布是投影
 
-这是唯一不能照抄的地方。Huabu 里 `space.json` 就是 source of truth；CoResearch 的 source of truth 是 `research/`，画布必须是它的投影，否则"确认绑定 contentHash""上游改了要标 stale"这些 Research Flow 的核心契约全部失效。
+这是唯一不能照抄的地方，且这条原则本身**没有变**——只是"CoResearch 的 source of truth"现在的准确说法是 Postgres 的 `research_entities`（project-scoped 的 Research Domain，见 [CONTEXT.md](../../../CONTEXT.md)），不是文件系统的 `research/` 目录。Huabu 里 `space.json` 就是 source of truth；CoResearch 的画布必须是 Research Domain 的投影，否则"确认绑定 contentHash""上游改了要标 stale"这些 Research Flow 的核心契约全部失效。
 
 解决办法是把节点数据分成三类，各有各的写入者：
 
@@ -183,6 +189,8 @@ stale                  灰化   ↻ 上游已更新
 
 ## 6. 包结构
 
+> **Superseded**：下面的 `apps/server` 是单体假设，现在拆成 CoResearch API + Agent Worker 两个进程（[ADR 0001](../../adr/0001-hybrid-backend-supabase-as-infra.md)/[0006](../../adr/0006-agent-worker-pi-coding-agent-sdk.md)），`write-coordinator` 也从进程内锁换成 Postgres 咨询锁（[ADR 0002](../../adr/0002-canvas-concurrency-and-realtime-sync.md)）。共享引擎（`canvas-engine/` 及其 8→9 条命令）这部分原样成立。
+
 ```text
 packages/
 ├── shared/
@@ -201,6 +209,20 @@ apps/
 依赖方向照 Huabu 的规则：`pages → components/handler/hooks/store/api`，`utils` 不得向上引用。新命令加在共享引擎的 `commands/` 并注册到 `HANDLERS`/`COMMAND_META`，不加在 web 里。
 
 ## 7. 数据流
+
+> **Superseded**：文件路径换成 Postgres 表，SSE 换成 Supabase Realtime（[ADR 0002](../../adr/0002-canvas-concurrency-and-realtime-sync.md)），投影/命令模型不变：
+
+```text
+research_entities / research_relations（Postgres，source of truth）
+      ↓ projector 读取 + 与当前画布 diff
+系统命令批次（CREATE_NODES / MERGE_NODE_DATA / CONNECT_NODES / DELETE_NODES，source: 'system'）
+      ↓ 共享 executor（服务端权威）
+canvas_nodes + canvas_layout + canvas_projections + canvas_deltas（Postgres）
+      ↓ Supabase Realtime 快路径 + GET .../deltas?afterVersion=N 权威 catch-up
+web applyDeltas（版本门控）
+```
+
+原文（历史记录，方法论不变，路径已过期）：
 
 ```text
 research/（source of truth）
@@ -275,7 +297,7 @@ type StalenessReason =
 - 多人协作与实时同步：Huabu 有 SSE 广播 + 版本 CAS 的完整方案（`canvas-realtime-sync.md`），V1 单人可先不做，但存储版本号要从一开始就留。
 - 桌面端（Electron）不在 V1。
 - 步骤页尚未实现，画布的"双击进入"暂时指向占位。
-- 大图性能与自动布局：Huabu 的结构化 Frame 求解器（`autoLayout/gridLayout.ts`）相当复杂，V1 用简单分层布局，不照抄。
+- 大图性能与自动布局：~~Huabu 的结构化 Frame 求解器相当复杂，V1 用简单分层布局，不照抄~~——**已推翻**，见 [ADR 0010](../../adr/0010-restore-structured-frame-layout.md)：Step 泳道的删除空隙压缩/内容变长让位这两个真实场景靠简单分层布局处理不了，最终恢复了 `SET_FRAME_LAYOUT`（`gridLayout.ts` 完整保留，V1 产品策略只暴露 `free`/`column`）。
 
 ## 12. 参考与使用边界
 

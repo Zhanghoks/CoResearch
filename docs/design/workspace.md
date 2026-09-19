@@ -1,5 +1,7 @@
 # CoResearch Workspace 设计文档
 
+> **⚠️ 大部分内容已被 SaaS 架构决策地图取代**（2026-09-19 起）。本文假设 CoResearch 是本地文件系统 workspace（`.pi/` 挂载能力、`research/` 目录即 source of truth）；CoResearch 现在是多租户 SaaS，能力（Agent 工具/技能）内置在代码里、不做运行时挂载发现（[ADR 0006](../adr/0006-agent-worker-pi-coding-agent-sdk.md)），研究状态落 Postgres（`research_entities`/`research_relations`，[CONTEXT.md](../../CONTEXT.md)）。**本文第 4 节的实体/关系建模思路（Problem/Idea/Paper/Claim + 关系分离、失败记忆不删除只改状态）原则上成立，是 `research_entities`/`research_relations` 表设计的概念来源**，只是物化方式从 markdown 文件变成数据库行。第 2/3/6/8 节描述的目录结构和文件物化方式已过期，标了 `> **Superseded**` 的地方请看最新决策。当前真值：仓库根目录 [CONTEXT.md](../../CONTEXT.md)、决策地图 [`.scratch/coresearch-saas-architecture/map.md`](../../.scratch/coresearch-saas-architecture/map.md)、[docs/adr/](../adr/)。本文其余部分保留作为设计历史记录，不删除。
+
 - 状态：Draft v1
 - 日期：2026-09-16
 - 背景：参考 ARIS（Auto-Research-In-Sleep）的架构原则，对 CoResearch 的 Workspace 目录设计做收敛与重构
@@ -32,6 +34,8 @@ CoResearch 之前的 Workspace 设计（`research/{problem,idea,literature}`）�
 ---
 
 ## 2. 最终目录结构（V1）
+
+> **Superseded**：这是本地文件系统 workspace 的目录树，CoResearch SaaS 不用它——`.pi/` 挂载机制被 [ADR 0006](../adr/0006-agent-worker-pi-coding-agent-sdk.md) 的自定义 `ResourceLoader`（内置、不做运行时发现）取代，`research/` 换成 Postgres 的 `research_entities`/`research_relations`/`proposals`，`.coresearch/` 的 trace/event 换成 `agent_runs`/`agent_messages`（[ADR 0011](../adr/0011-agent-messages-store-pi-session-entries-directly.md)），`artifacts/`/`uploads/` 换成 Supabase Storage + `blobs` 元数据表。下面的树状结构保留作为"当初怎么想的"记录。
 
 ```text
 workspace/
@@ -103,6 +107,8 @@ workspace/
 ---
 
 ## 3. 四层模型
+
+> **Superseded**：四层的**概念**（能力/研究状态/产物/系统管理分离）成立，物化方式已变——"Research State 是唯一的 source of truth"这条原则现在由 Postgres 的 `research_entities` 承担（画布是它的投影，不是相反，见 [research-canvas.md](./canvas/research-canvas.md) 第 3 节），不是 `research/` 目录。
 
 ```text
 ┌───────────────────────────────┐
@@ -193,6 +199,8 @@ Idea ──evaluated_by──▶ Experiment
 
 ## 5. Artifact Contract：Skill 间协作的显式契约
 
+> **Superseded 注**：下文"每个 skill 声明输入/输出实体契约"的思路成立，但"skill"现在特指 [ADR 0006](../adr/0006-agent-worker-pi-coding-agent-sdk.md) 里内置在代码仓库、通过自定义 `ResourceLoader` 加载的 Pi Skill，不是 `.pi install` 挂载的独立包；下面举例的文件路径（`research/problems/<id>/state.json` 等）同样已过期，参照 [CONTEXT.md](../../CONTEXT.md) 的 Research Entity 概念理解契约的精神。
+
 不依赖"Agent 自己记得该做什么"，每个 skill 声明输入/输出的实体契约：
 
 ```text
@@ -236,6 +244,8 @@ Verifier:   paper 文件存在 且 关系记录有效
 
 ## 6. `.coresearch/`：系统运行管理，与研究状态解耦
 
+> **Superseded**：这些运行时数据现在是 Postgres 表——`agent_runs`（[ticket 19](../../.scratch/coresearch-saas-architecture/issues/19-agent-worker-run-scheduling.md)）、`agent_messages`（[ADR 0011](../adr/0011-agent-messages-store-pi-session-entries-directly.md)）——不是 `.coresearch/` 目录下的 JSON/JSONL 文件。"系统管理数据与业务研究状态解耦"这条原则不变。
+
 `.coresearch/` 只放运行时/系统管理数据，不放业务研究状态：
 
 - `manifest.json`：workspace 元信息（schemaVersion、projectId、workspaceVersion）
@@ -253,6 +263,8 @@ Verifier:   paper 文件存在 且 关系记录有效
 
 ## 7. Skill 源码组织：SKILL.md 是行为规范本身
 
+> **Superseded 注**：Huabu 实际的 skills 系统（`.agents/skills/` + `skills.route.ts`）核查后是内置 Agent 自己的 prompt 目录/斜杠命令，不是"第三方可挂载扩展"（[ticket 16](../../.scratch/coresearch-saas-architecture/issues/16-agent-extension-architecture.md) 的核查记录）。下文"SKILL.md 是行为规范本身、AGENTS.md 只做 routing"这条组织原则依然合理，但 `packages/skills/<name>/` 这种目录形态要不要照搬、要不要在阶段二单独定，还没有对应的 ticket——先留在这里当已知的开放问题。
+
 `AGENTS.md` 只做 routing：告诉 Agent 现在在哪、有哪些资源、有哪些全局规则。具体某个能力"怎么做"由该 skill 自己的 `SKILL.md` 定义，不写进 AGENTS.md 或 coordinator 的巨大 system prompt。
 
 ```text
@@ -268,6 +280,8 @@ packages/skills/problem-framing/
 ---
 
 ## 8. Artifacts：research state 与展示产物彻底分离
+
+> **Superseded**：`research/` 换成 Postgres，下面举的文件路径已过期，但"canonical source 和渲染产物分离"这条原则不变。
 
 `research/ideas/idea-003/idea.md` 是 canonical source。`artifacts/generated/idea-003.html` 是从它渲染出的 view，不应手工编辑，也不是 source of truth。
 
@@ -296,11 +310,11 @@ Research State → Renderer → Artifact
 
 ## 10. 核心结论
 
-CoResearch Workspace 的定位应从"Agent 可以操作的一堆文件"升级为：
+> **Superseded（结论本身依然成立，物化方式变了）**：CoResearch SaaS 化后，"目录结构只是这个图的一种物化表示"这句话里的物化表示从文件系统换成了 Postgres——原句改写：
 
-> **A persistent research state graph materialized as a Pi-compatible workspace.**
+> **A persistent research state graph materialized as Postgres tables (`research_entities`/`research_relations`), projected onto a Canvas that is never itself the source of truth.**
 
-核心不是目录本身，而是 `Problem ↔ Idea ↔ Paper ↔ Claim ↔ Experiment` 构成的实体关系图；目录结构只是这个图的一种物化表示（materialized representation）。这个模型比"idea.md + literature/"更适合支撑后续的多人协作、Agent 协同、HTML Workspace 渲染和 Idea Evolution 时间线等需求。
+CoResearch Workspace 的定位应从"Agent 可以操作的一堆文件"升级为一个 `Problem ↔ Idea ↔ Paper ↔ Claim ↔ Experiment` 构成的实体关系图（历史原句："A persistent research state graph materialized as a Pi-compatible workspace"，`.pi/` 挂载这条已经不成立，保留原句供对照）；这个模型比"idea.md + literature/"更适合支撑后续的多人协作、Agent 协同、Canvas 渲染和 Idea Evolution 时间线等需求。
 
 ---
 

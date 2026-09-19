@@ -345,7 +345,7 @@ V1 明确不做，且**不是"以后补"，是"证明需要再说"**：
 | interactive views | 无需求 |
 | SQLite 后端 | 先 Disk；port 分层保留，换后端时不改上层 |
 
-对应地，命令集从 17 条裁到 **8 条**：
+对应地，命令集从 17 条裁到 **8 条**（原始 V1 判断；下方已更新为最终结论）：
 
 ```ts
 type CanvasCommandType =
@@ -356,6 +356,8 @@ type CanvasCommandType =
 ```
 
 推迟：`ALIGN_NODES` / `DISTRIBUTE_NODES` / `REORDER_NODES` / `SET_NODE_LOCKED` / `CHANGE_NODE_TYPE` / `DISSOLVE_FRAME` / `SET_FRAME_LAYOUT` / `APPLY_MEASURED_HEIGHT`。注册表是穷尽映射，加一条就是加一个文件加两行注册，不需要预留。
+
+> **更新（[ADR 0010](../../adr/0010-restore-structured-frame-layout.md)）**：`SET_FRAME_LAYOUT` 已从"推迟"列表移出、恢复，命令集实际是 **9 条**——Step 泳道的删除空隙压缩、节点内容变长后的下游让位，靠 Research Projector 手写等于重新发明半个布局引擎，这两个场景需要 Huabu 现成的结构化 Frame 求解器。其余 7 条仍然推迟。
 
 ## 10. 改动清单
 
@@ -450,14 +452,14 @@ Huabu 的 `nodes/<label>.md` 是节点正文的真值。CoResearch 里 `research
 ```text
 packages/shared/src/
 ├── canvas-engine/
-│   ├── executor.ts           # 照抄结构，砍掉 frame 求解与 provenance 两段
+│   ├── executor.ts           # 照抄结构，砍掉 provenance；frame 求解已恢复（ADR 0010）
 │   ├── interfaces.ts         # 原样
 │   ├── delta.ts              # 原样
 │   ├── diff.ts               # 原样
-│   ├── commands/             # 8 个文件 + types.ts + index.ts
+│   ├── commands/             # 9 个文件 + types.ts + index.ts（含 setFrameLayout.ts，ADR 0010）
 │   └── postEffects.ts
 ├── types/canvas/
-│   ├── command.ts            # 8 条命令的判别联合
+│   ├── command.ts            # 9 条命令的判别联合（ADR 0010 恢复 SET_FRAME_LAYOUT）
 │   ├── execution.ts          # 原样
 │   ├── node.ts               # crEntity + 5 个复用类型
 │   └── edge.ts
