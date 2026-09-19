@@ -1,6 +1,6 @@
 // The only production file allowed to import createAgentSession (ADR 0006).
 
-import { mkdirSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -17,6 +17,7 @@ import {
   assertExposedToolsMatch,
 } from "./allowlist.js";
 import { coresearchResourceLoader } from "./coresearchResourceLoader.js";
+import { deepseekModelsFile } from "./resolveModel.js";
 import {
   createCoresearchTools,
   type ResearchToolHost,
@@ -42,11 +43,18 @@ export async function createCoResearchAgentSession(opts: {
 }) {
   const isolated = join(tmpdir(), "coresearch-pi", opts.projectId);
   mkdirSync(isolated, { recursive: true });
+  if (opts.model.provider === "deepseek") {
+    writeFileSync(
+      join(isolated, "models.json"),
+      JSON.stringify(deepseekModelsFile(), null, 2),
+    );
+  }
 
   const { session } = await createAgentSession({
     cwd: isolated,
     agentDir: isolated,
     model: opts.model,
+    thinkingLevel: opts.model.provider === "deepseek" ? "high" : undefined,
     resourceLoader: coresearchResourceLoader,
     sessionManager: SessionManager.inMemory(
       opts.threadId,

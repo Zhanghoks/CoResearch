@@ -1,10 +1,11 @@
-// Agent Worker entry: claim queued runs and process them.
-// Full lease steal / cancel (ticket 10) is out of Milestone 1.
+// Agent Worker entry: claim queued / lease-expired runs and process them.
 
 import pg from "pg";
 
+import { claimNextRun } from "@coresearch/research";
+
 import { runEventChannel } from "./adaptPiEvent.js";
-import { claimNextRun, processRun } from "./processRun.js";
+import { processRun } from "./processRun.js";
 
 import type { SqlQuery } from "@coresearch/research";
 
@@ -46,6 +47,7 @@ export async function workerLoop(workerId: string): Promise<never> {
         continue;
       }
       await processRun(asSql(client), run, {
+        workerId,
         publish: (runId, event) => publishNotify(client, runId, event),
       });
     } catch (err) {

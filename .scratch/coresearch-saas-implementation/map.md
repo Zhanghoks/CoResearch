@@ -4,7 +4,7 @@
 
 **这张地图承载执行，不是决策**——覆盖阶段一（[决策地图](../coresearch-saas-architecture/map.md)，22 条决策）与阶段二（[docs/spec/](../../docs/spec/) 六份实现级 spec）已经锁定的东西，用 tracer-bullet 垂直切片写成能跑的代码，不按层横切。默认的 wayfinder"只规划不执行"在这里被覆盖：每张 ticket 的完成标准是代码写完、能跑、测试过。
 
-**Milestone 1**（本地图当前目标）：08（Pi Agent → Candidate）和 07（Research-managed Node Ownership）都跑绿，算最小闭环完成——前者证明"Agent 提案 → Conversation → 用户接受 → Research Domain → Canvas Projection"整条链路，后者证明这条链路没有破坏 Research/Canvas 的所有权边界。09（Proposal Track B）和 10（Worker 韧性）留在地图里但**暂不进入 execution frontier**，等 Milestone 1 完成再算进第二批。
+**Milestone 1**（07 + 08）已绿。**第二批**：09（Proposal Track B）和 10（Worker 韧性）已进入 execution frontier 并落地。
 
 ## Notes
 
@@ -28,10 +28,11 @@
     06 Deterministic Candidate → Accept → Projection (V3A)
     ├── 07 Research-managed Node Ownership (V4)          ← 只需要 06，不需要 08
     └── 08 Pi Agent → Candidate → 同一 Accept Path (V3B)   ← 已绿
-         ├── 09 Proposal Track B (V5)          ← 暂不进入 frontier
-         └── 10 Worker 韧性 (V6)                ← 暂不进入 frontier
+         ├── 09 Proposal Track B (V5)          ← 已绿
+         └── 10 Worker 韧性 (V6)                ← 已绿
 
 Milestone 1 = 07 + 08 都绿
+第二批 = 09 + 10 都绿
 ```
 
 ## Decisions so far
@@ -43,7 +44,9 @@ Milestone 1 = 07 + 08 都绿
 - [05](issues/05-note-editing-realtime-catchup.md) resolved：note 的 create/move/edit/delete 走 `/execute` + advisory lock + `canvas_deltas`；catch-up 端点和 `nextSyncAction` 已测。双标签页 Realtime 代码已接，未在真实浏览器验证。
 - [06](issues/06-deterministic-candidate-accept.md) resolved：fixture `CandidatePart` → accept 单事务物化 entity+revision+crEntity+projection+delta；幂等与回滚已测。GET overlay 经 `canvas_projections`。
 - [07](issues/07-research-managed-node-ownership.md) resolved：`executeFromRequest` / `executeAsProjector` 双入口；owned MERGE → `invalid-scope`；`userNote` 可写；投影器刷新同一 nodeId、几何不动。
-- [08](issues/08-pi-agent-candidate.md) resolved：Pi fail-closed 工厂 + 自定义 ResourceLoader + threads/runs/SSE；`propose_candidates` 写 SessionEntry，accept 复用 06。真实 LLM 往返未测。09/10 仍不进 frontier。
+- [08](issues/08-pi-agent-candidate.md) resolved：Pi fail-closed 工厂 + 自定义 ResourceLoader + threads/runs/SSE；`propose_candidates` 写 SessionEntry，accept 复用 06。真实 LLM 往返未测。
+- [09](issues/09-proposal-track-b.md) resolved：`propose_revision` 写 pending `proposals`；GET 列表走 Idea Meta Space Review 侧栏；accept CAS + 投影刷新同一 nodeId；reject 只改 status。
+- [10](issues/10-worker-resilience.md) resolved：claim 含 lease 过期 steal + `SKIP LOCKED`；15s 心跳 / 2s 取消轮询 / `session.abort()`；`POST /api/runs/:id/cancel`。双进程手测未做。
 
 ## Not yet specified
 

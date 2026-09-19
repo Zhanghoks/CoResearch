@@ -10,6 +10,13 @@ export type ResearchToolHost = {
     payload: unknown;
     rationale?: string;
   }) => Promise<{ candidateId: string }>;
+  proposeRevision?: (input: {
+    entityId: string;
+    baseStateRevision: number;
+    kind: string;
+    changes: unknown[];
+    rationale?: string;
+  }) => Promise<{ proposalId: string }>;
   inspectResearchState?: (input: {
     kind?: string;
     status?: string;
@@ -86,7 +93,8 @@ export function createCoresearchTools(host: ResearchToolHost) {
   const proposeRevision = defineTool({
     name: "propose_revision",
     label: "Propose revision",
-    description: "对已有实体提出 Track B 修订（本里程碑未启用）",
+    description:
+      "对已确认实体提出 Track B 修订。只写入 pending Proposal，不改实体、不写画布。",
     parameters: Type.Object({
       entityId: Type.String(),
       baseStateRevision: Type.Number(),
@@ -94,8 +102,19 @@ export function createCoresearchTools(host: ResearchToolHost) {
       changes: Type.Array(Type.Unknown()),
       rationale: Type.Optional(Type.String()),
     }),
-    execute: async () =>
-      textResult("propose_revision is not implemented in this milestone"),
+    execute: async (_id, params) => {
+      if (!host.proposeRevision) {
+        return textResult("propose_revision host is not configured");
+      }
+      const { proposalId } = await host.proposeRevision({
+        entityId: params.entityId,
+        baseStateRevision: params.baseStateRevision,
+        kind: params.kind,
+        changes: params.changes,
+        rationale: params.rationale,
+      });
+      return textResult(`Proposed revision ${proposalId}`, { proposalId });
+    },
   });
 
   const askUser = defineTool({

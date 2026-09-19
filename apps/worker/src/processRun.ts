@@ -1,33 +1,41 @@
 // One claimed run: subscribe → prompt → persist completed SessionEntry
 // rows only (docs/spec/05 §3). Token deltas go through publish, never
-// agent_messages.
+// agent_messages. Cancel/heartbeat are ticket 10 (ADR 0006 / ticket 19).
 
 import {
+  CANCEL_POLL_MS,
+  HEARTBEAT_MS,
+  claimNextRun,
+  heartbeatRun,
+  isCancelRequested,
+  markRun,
   persistSessionEntries,
   proposeCandidate,
+  proposeRevision,
+  type ClaimedRun,
   type SqlQuery,
 } from "@coresearch/research";
 
 import { adaptPiEvent, type AdaptedEvent } from "./adaptPiEvent.js";
 import {
   createCoResearchAgentSession,
-  stubSessionModel,
   type ResearchToolHost,
   type SessionModel,
 } from "./createCoResearchAgentSession.js";
+import { resolveSessionModel } from "./resolveModel.js";
 
-export type AgentRunRow = {
-  id: string;
-  threadId: string;
-  projectId: string;
-  prompt: string;
-  cancelRequested: boolean;
-};
+export type AgentRunRow = ClaimedRun;
 
 export type ProcessRunPublish = (
   runId: string,
   event: AdaptedEvent,
 ) => Promise<void>;
+
+export { claimNextRun };
+
+function abortSession(session: { abort?: () => void }): void {
+  session.abort?.();
+}
 
 export async function loadThreadEntries(
   db: SqlQuery,
@@ -49,8 +57,10 @@ export async function processRun(
     publish: ProcessRunPublish;
     createSession?: typeof createCoResearchAgentSession;
     host?: ResearchToolHost;
-    /** Defaults to the stub model so the factory can boot without a provider key. */
     model?: SessionModel;
+    workerId?: string;
+    heartbeatMs?: number;
+    cancelPollMs?: number;
   },
 ): Promise<void> {
   if (run.cancelRequested) {
@@ -68,6 +78,15 @@ export async function processRun(
         payload: input.payload,
         rationale: input.rationale,
       }),
+    proposeRevision: (input) =>
+      proposeRevision(db, {
+        projectId: run.projectId,
+        entityId: input.entityId,
+        baseStateRevision: input.baseStateRevision,
+        kind: input.kind,
+        changes: input.changes,
+        rationale: input.rationale,
+      }),
   };
 
   const createSession = opts.createSession ?? createCoResearchAgentSession;
@@ -76,7 +95,7 @@ export async function processRun(
     | undefined;
 
   const session = await createSession({
-    model: opts.model ?? stubSessionModel(),
+    model: opts.model ?? resolveSessionModel(),
     projectId: run.projectId,
     threadId: run.threadId,
     entries,
@@ -88,13 +107,44 @@ export async function processRun(
     if (adapted) void opts.publish(run.id, adapted);
   });
 
+  const workerId = opts.workerId ?? run.leaseOwner;
+  const timers: ReturnType<typeof setInterval>[] = [];
+  let abortRequested = false;
+
+  if (workerId) {
+    timers.push(
+      setInterval(() => {
+        void heartbeatRun(db, run.id, workerId);
+      }, opts.heartbeatMs ?? HEARTBEAT_MS),
+    );
+  }
+  timers.push(
+    setInterval(() => {
+      void isCancelRequested(db, run.id).then((requested) => {
+        if (!requested) return;
+        abortRequested = true;
+        abortSession(session);
+      });
+    }, opts.cancelPollMs ?? CANCEL_POLL_MS),
+  );
+
   try {
     await session.prompt(run.prompt);
+    if (abortRequested || (await isCancelRequested(db, run.id))) {
+      await markRun(db, run.id, "cancelled");
+      await opts.publish(run.id, { type: "run.cancelled", payload: { runId: run.id } });
+      return;
+    }
     const sessionEntries = session.sessionManager.getEntries() as unknown[];
     await persistSessionEntries(db, run.threadId, sessionEntries);
     await markRun(db, run.id, "completed");
     await opts.publish(run.id, { type: "run.completed", payload: { runId: run.id } });
   } catch (err) {
+    if (abortRequested || (await isCancelRequested(db, run.id))) {
+      await markRun(db, run.id, "cancelled");
+      await opts.publish(run.id, { type: "run.cancelled", payload: { runId: run.id } });
+      return;
+    }
     await markRun(db, run.id, "failed");
     await opts.publish(run.id, {
       type: "run.failed",
@@ -102,51 +152,7 @@ export async function processRun(
     });
     throw err;
   } finally {
+    for (const timer of timers) clearInterval(timer);
     session.dispose();
   }
-}
-
-async function markRun(
-  db: SqlQuery,
-  runId: string,
-  status: "completed" | "failed" | "cancelled",
-): Promise<void> {
-  await db.query(
-    `UPDATE agent_runs
-        SET status = $2, ended_at = now()
-      WHERE id = $1::uuid`,
-    [runId, status],
-  );
-}
-
-export async function claimNextRun(
-  db: SqlQuery,
-  workerId: string,
-): Promise<AgentRunRow | null> {
-  const claimed = await db.query(
-    `UPDATE agent_runs
-        SET status = 'running',
-            lease_owner = $1,
-            lease_expires_at = now() + interval '45 seconds',
-            heartbeat_at = now(),
-            started_at = coalesce(started_at, now())
-      WHERE id = (
-        SELECT id FROM agent_runs
-         WHERE status = 'queued'
-         ORDER BY created_at
-         FOR UPDATE SKIP LOCKED
-         LIMIT 1
-      )
-      RETURNING id, thread_id, project_id, prompt, cancel_requested`,
-    [workerId],
-  );
-  const row = claimed.rows[0];
-  if (!row) return null;
-  return {
-    id: String(row.id),
-    threadId: String(row.thread_id),
-    projectId: String(row.project_id),
-    prompt: typeof row.prompt === "string" ? row.prompt : "",
-    cancelRequested: Boolean(row.cancel_requested),
-  };
 }

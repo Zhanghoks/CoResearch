@@ -2,25 +2,33 @@ import clsx from 'clsx'
 import { Link2, Send, Sparkles } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 
-import { createRun, createThread } from '../../api/agent'
+import { cancelRun, createRun, createThread } from '../../api/agent'
 import { listCandidates, type CandidatePart } from '../../api/candidates'
+import { acceptProposal, listProposals, rejectProposal, type ProposalRecord } from '../../api/proposals'
 import { useAgentRunStream } from '../../hooks/useAgentRunStream'
 import { getAccentTokens, resolveAccent } from '../../lib/accent'
 import { NODE_VISUALS } from '../../lib/nodeVisuals'
 import type { CrEntityNode } from '../../data/seedGraph'
 import { CandidateCard } from '../Candidates/CandidateCard'
+import { ProposalCard } from '../Proposals/ProposalCard'
 import { SeedDetailPanel } from './SeedDetailPanel'
 
 interface RightPanelProps {
   selectedNode: CrEntityNode | null
   detailRequested: number
   projectId?: string
+  onResearchChanged?: () => void
 }
 
 // Detail Surface section order, ported from
 // docs/design/canvas/huabu-node-presentation-and-links.md §6.
-export function RightPanel({ selectedNode, detailRequested, projectId }: RightPanelProps) {
-  const [tab, setTab] = useState<'chat' | 'detail'>('chat')
+export function RightPanel({
+  selectedNode,
+  detailRequested,
+  projectId,
+  onResearchChanged,
+}: RightPanelProps) {
+  const [tab, setTab] = useState<'chat' | 'detail' | 'review'>('chat')
 
   useEffect(() => {
     if (detailRequested > 0) setTab('detail')
@@ -29,7 +37,7 @@ export function RightPanel({ selectedNode, detailRequested, projectId }: RightPa
   return (
     <div className="bg-surface border-edge-default flex h-full w-full flex-col border-l">
       <div className="border-edge-default flex border-b">
-        {(['chat', 'detail'] as const).map((t) => (
+        {(['chat', 'review', 'detail'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -38,13 +46,15 @@ export function RightPanel({ selectedNode, detailRequested, projectId }: RightPa
               tab === t ? 'text-fg-default border-info border-b-2' : 'text-fg-subtle',
             )}
           >
-            {t === 'chat' ? 'Agent' : 'Detail'}
+            {t === 'chat' ? 'Agent' : t === 'review' ? 'Review' : 'Detail'}
           </button>
         ))}
       </div>
 
       {tab === 'chat' ? (
         <ChatTab node={selectedNode} projectId={projectId} />
+      ) : tab === 'review' ? (
+        <ReviewTab projectId={projectId} onResearchChanged={onResearchChanged} />
       ) : (
         <DetailTab node={selectedNode} />
       )}
@@ -162,6 +172,19 @@ function ChatTab({
             }}
             className="text-fg-default placeholder:text-fg-subtle flex-1 resize-none bg-transparent px-1 text-[12.5px] outline-none"
           />
+          {runId ? (
+            <button
+              type="button"
+              onClick={() => {
+                void cancelRun(runId).catch((err: unknown) => {
+                  setLoadError(err instanceof Error ? err.message : String(err))
+                })
+              }}
+              className="text-fg-muted h-7 shrink-0 px-1.5 text-[11px]"
+            >
+              Cancel
+            </button>
+          ) : null}
           <button
             type="button"
             disabled={sending || !prompt.trim()}
@@ -172,6 +195,84 @@ function ChatTab({
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ReviewTab({
+  projectId,
+  onResearchChanged,
+}: {
+  projectId?: string
+  onResearchChanged?: () => void
+}) {
+  const [proposals, setProposals] = useState<ProposalRecord[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const refresh = useCallback(async (pid: string) => {
+    const listed = await listProposals(pid, 'pending')
+    setProposals(listed.proposals)
+  }, [])
+
+  useEffect(() => {
+    if (!projectId) return
+    let cancelled = false
+    refresh(projectId).catch((err: unknown) => {
+      if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, refresh])
+
+  async function onAccept(id: string) {
+    setBusyId(id)
+    setLoadError(null)
+    try {
+      await acceptProposal(id)
+      if (projectId) await refresh(projectId)
+      onResearchChanged?.()
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function onReject(id: string) {
+    setBusyId(id)
+    setLoadError(null)
+    try {
+      await rejectProposal(id)
+      if (projectId) await refresh(projectId)
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-3 text-[12.5px]">
+      <p className="text-fg-subtle mb-2 text-[11px]">
+        Idea Meta Space — pending revisions stay off the canvas until you accept them.
+      </p>
+      {loadError ? <p className="text-danger mb-2">{loadError}</p> : null}
+      {proposals.length === 0 ? (
+        <p className="text-fg-subtle">No pending proposals.</p>
+      ) : (
+        proposals.map((proposal) => (
+          <div key={proposal.id} className="mb-2">
+            <ProposalCard
+              proposal={proposal}
+              busy={busyId === proposal.id}
+              onAccept={(id) => void onAccept(id)}
+              onReject={(id) => void onReject(id)}
+            />
+          </div>
+        ))
+      )}
     </div>
   )
 }

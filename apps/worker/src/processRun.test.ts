@@ -74,6 +74,7 @@ describe("processRun persist vs stream", () => {
         listener = fn;
         return () => {};
       },
+      abort() {},
       async prompt() {
         listener?.({
           type: "message_update",
@@ -96,12 +97,15 @@ describe("processRun persist vs stream", () => {
         projectId,
         prompt: "hi",
         cancelRequested: false,
+        leaseOwner: "test-worker",
       },
       {
         publish: async (_id, event) => {
           published.push(event);
         },
         createSession: async () => session as never,
+        heartbeatMs: 60_000,
+        cancelPollMs: 60_000,
         host: {
           proposeCandidate: async () => ({ candidateId: createUuid() }),
         },
@@ -126,6 +130,7 @@ describe("processRun persist vs stream", () => {
       subscribe() {
         return () => {};
       },
+      abort() {},
       async prompt() {},
       sessionManager: { getEntries: () => [] },
       dispose() {},
@@ -139,9 +144,12 @@ describe("processRun persist vs stream", () => {
         projectId: createUuid(),
         prompt: "propose",
         cancelRequested: false,
+        leaseOwner: "test-worker",
       },
       {
         publish: async () => {},
+        heartbeatMs: 60_000,
+        cancelPollMs: 60_000,
         createSession: async (opts) => {
           const result = await opts.host!.proposeCandidate({
             kind: "direction",
@@ -160,5 +168,90 @@ describe("processRun persist vs stream", () => {
     assert.ok(part);
     assert.equal(part.candidateId, captured);
     assert.equal(part.kind, "direction");
+  });
+
+  it("marks cancelled without prompting when cancel_requested is already set", async () => {
+    const { db, runs } = mockDb();
+    let prompted = false;
+    await processRun(
+      db,
+      {
+        id: createUuid(),
+        threadId: createUuid(),
+        projectId: createUuid(),
+        prompt: "hi",
+        cancelRequested: true,
+        leaseOwner: "test-worker",
+      },
+      {
+        publish: async () => {},
+        createSession: async () => {
+          prompted = true;
+          return {
+            subscribe() {
+              return () => {};
+            },
+            abort() {},
+            async prompt() {
+              prompted = true;
+            },
+            sessionManager: { getEntries: () => [] },
+            dispose() {},
+          } as never;
+        },
+      },
+    );
+    assert.equal(prompted, false);
+    assert.equal(runs.at(-1)?.status, "cancelled");
+  });
+
+  it("calls session.abort when cancel is requested mid-run", async () => {
+    const { db, runs } = mockDb();
+    const runId = createUuid();
+    let abortCalls = 0;
+    let cancelNow = false;
+    const originalQuery = db.query;
+    db.query = async (sql, params = []) => {
+      if (sql.includes("SELECT cancel_requested")) {
+        return { rows: [{ cancel_requested: cancelNow }] };
+      }
+      return originalQuery(sql, params);
+    };
+
+    const session = {
+      subscribe() {
+        return () => {};
+      },
+      abort() {
+        abortCalls += 1;
+      },
+      async prompt() {
+        cancelNow = true;
+        await new Promise((resolve) => setTimeout(resolve, 30));
+      },
+      sessionManager: { getEntries: () => [] },
+      dispose() {},
+    };
+
+    await processRun(
+      db,
+      {
+        id: runId,
+        threadId: createUuid(),
+        projectId: createUuid(),
+        prompt: "hi",
+        cancelRequested: false,
+        leaseOwner: "test-worker",
+      },
+      {
+        publish: async () => {},
+        createSession: async () => session as never,
+        heartbeatMs: 60_000,
+        cancelPollMs: 10,
+      },
+    );
+
+    assert.ok(abortCalls >= 1);
+    assert.equal(runs.at(-1)?.status, "cancelled");
   });
 });

@@ -31,4 +31,31 @@ export {
 } from "./candidate.js";
 export { proposeCandidate, type ProposeCandidateInput } from "./proposeCandidate.js";
 export { persistSessionEntries, isUuid } from "./sessionEntries.js";
+export {
+  PROPOSAL_KINDS,
+  ProposalNotFoundError,
+  ProposalConflictError,
+  applyProposalChanges,
+  isProposalKind,
+  listProposals,
+  nextRevisionFields,
+  parseProposalChanges,
+  proposeRevision,
+  rejectProposal,
+  type ProposalChange,
+  type ProposalKind,
+  type ProposalRecord,
+  type ProposeRevisionInput,
+} from "./proposal.js";
+export {
+  CANCEL_POLL_MS,
+  HEARTBEAT_MS,
+  LEASE_SECONDS,
+  claimNextRun,
+  heartbeatRun,
+  isCancelRequested,
+  markRun,
+  requestRunCancel,
+  type ClaimedRun,
+} from "./runs.js";
 export type { SqlQuery } from "./sql.js";

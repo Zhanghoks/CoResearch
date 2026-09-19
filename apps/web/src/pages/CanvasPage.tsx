@@ -283,6 +283,14 @@ export default function CanvasPage() {
               selectedNode={null}
               detailRequested={0}
               projectId={snapshot.projectId}
+              onResearchChanged={() => {
+                if (!canvasId) return
+                void getCanvas(canvasId).then((loaded) => {
+                  setSnapshot(loaded)
+                  setNodes(toFlow(loaded.nodes))
+                  versionRef.current = loaded.version
+                })
+              }}
             />
           </div>
         )}

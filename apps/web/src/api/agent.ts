@@ -31,3 +31,11 @@ export function listThreadMessages(threadId: string): Promise<AgentMessageList> 
     fallbackMessage: 'Failed to load messages',
   })
 }
+
+export function cancelRun(runId: string): Promise<{ runId: string; cancelRequested: boolean }> {
+  return apiFetch(`/api/runs/${runId}/cancel`, {
+    method: 'POST',
+    json: {},
+    fallbackMessage: 'Failed to cancel run',
+  })
+}

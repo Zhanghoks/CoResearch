@@ -135,6 +135,46 @@ export interface AcceptCandidateResult {
   deltas: unknown[];
 }
 
+export type ProposalKind =
+  | "clarification"
+  | "problem"
+  | "hypothesis"
+  | "revision"
+  | "pivot"
+  | "direction"
+  | "approach"
+  | "research_question";
+
+export interface ProposalChange {
+  target: string;
+  beforeStatementId: string | null;
+  after: unknown;
+}
+
+/** One row of `GET /api/projects/:projectId/proposals`. */
+export interface ProposalRecord {
+  id: string;
+  projectId: string;
+  entityId: string;
+  baseStateRevision: number;
+  kind: ProposalKind;
+  changes: ProposalChange[];
+  rationale: string | null;
+  status: "pending" | "accepted" | "rejected" | "superseded";
+  createdAt: string;
+}
+
+export interface ProposalList {
+  proposals: ProposalRecord[];
+}
+
+export interface AcceptProposalResult {
+  proposalId: string;
+  entityId: string;
+  revision: number;
+  nodeId: string | null;
+}
+
 /** Response of `POST /api/projects/:projectId/threads`. */
 export interface CreatedThread {
   threadId: string;

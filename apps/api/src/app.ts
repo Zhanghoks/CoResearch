@@ -15,9 +15,20 @@ import { executeOnCanvas } from "./canvas/executeOnCanvas.js";
 import { readCanvas } from "./canvas/readCanvas.js";
 import { readDeltas } from "./canvas/readDeltas.js";
 import {
+  listProposals,
+  ProposalConflictError,
+  ProposalNotFoundError,
+  rejectProposal,
+  requestRunCancel,
+} from "@coresearch/research";
+
+import {
   AcceptNotFoundError,
   acceptCandidate,
 } from "./research/acceptCandidate.js";
+import {
+  acceptProposal,
+} from "./research/acceptProposal.js";
 import {
   ProjectNotFoundError,
   insertFixtureCandidate,
@@ -34,7 +45,7 @@ import {
   type AgentStreamBus,
 } from "./agent/streamBus.js";
 
-import type { AcceptCandidateBody, CanvasCommand } from "@coresearch/shared";
+import type { AcceptCandidateBody, CanvasCommand, ProposalList } from "@coresearch/shared";
 
 import type { RequestContext, RequestDb } from "./db/index.js";
 
@@ -169,6 +180,57 @@ export function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): Fastif
       },
     );
 
+    api.get("/api/projects/:projectId/proposals", async (request) => {
+      const { projectId } = request.params as { projectId: string };
+      const status = (request.query as { status?: string }).status;
+      const proposals = await deps.withRequestContext(
+        { userId: request.userId },
+        (db) => listProposals(db, projectId, status),
+      );
+      const body: ProposalList = { proposals };
+      return body;
+    });
+
+    api.post("/api/proposals/:id/accept", async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        return await deps.withRequestContext(
+          { userId: request.userId },
+          (db) => acceptProposal(db, id),
+        );
+      } catch (err) {
+        if (err instanceof ProposalNotFoundError) {
+          return reply.code(404).send({ error: err.message });
+        }
+        if (err instanceof ProposalConflictError) {
+          return reply.code(409).send({
+            error: err.message,
+            code: "revision_conflict",
+            details: {
+              currentRevision: err.currentRevision,
+              baseStateRevision: err.baseStateRevision,
+            },
+          });
+        }
+        throw err;
+      }
+    });
+
+    api.post("/api/proposals/:id/reject", async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        return await deps.withRequestContext(
+          { userId: request.userId },
+          (db) => rejectProposal(db, id),
+        );
+      } catch (err) {
+        if (err instanceof ProposalNotFoundError) {
+          return reply.code(404).send({ error: err.message });
+        }
+        throw err;
+      }
+    });
+
     api.get("/api/canvases/:canvasId", async (request, reply) => {
       const { canvasId } = request.params as { canvasId: string };
       const canvas = await deps.withRequestContext(
@@ -239,6 +301,21 @@ export function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): Fastif
         return reply.code(404).send({ error: "thread not found" });
       }
       return list;
+    });
+
+    api.post("/api/runs/:runId/cancel", async (request, reply) => {
+      const { runId } = request.params as { runId: string };
+      const visible = await deps.withRequestContext(
+        { userId: request.userId },
+        (db) => runVisibleToUser(db, runId),
+      );
+      if (!visible) {
+        return reply.code(404).send({ error: "run not found" });
+      }
+      await deps.withRequestContext({ userId: request.userId }, (db) =>
+        requestRunCancel(db, runId),
+      );
+      return { runId, cancelRequested: true };
     });
 
     api.get("/api/runs/:runId/stream", async (request, reply) => {
