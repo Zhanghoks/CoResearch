@@ -186,48 +186,14 @@ CREATE TABLE canvas_deltas (
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
--- ── 5. Usage & files (first-pass, not a locked decision — see spec §5) ───
+-- usage_ledger / blobs / papers deliberately NOT in this migration — they're
+-- flagged "first-pass, not a locked decision" in docs/spec/01-database-schema.md
+-- §5 and aren't needed by any ticket through V4 (papers isn't touched until
+-- the Agent's search_papers/read_paper tools land, V3B territory). Add them
+-- in a follow-up migration when a ticket actually needs them, not because
+-- the spec doc already wrote the DDL.
 
-CREATE TABLE usage_ledger (
-  id bigserial PRIMARY KEY,
-  project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES auth.users(id),
-  run_id uuid NULL REFERENCES agent_runs(id),
-  model text NOT NULL,
-  input_tokens int NOT NULL,
-  output_tokens int NOT NULL,
-  cost_cents int NOT NULL,
-  step text,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE blobs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  storage_key text NOT NULL,
-  mime text NOT NULL,
-  bytes bigint NOT NULL,
-  sha256 text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE TABLE papers (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id uuid NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  doi text NULL,
-  arxiv_id text NULL,
-  s2_paper_id text NULL,
-  openalex_work_id text NULL,
-  title text NOT NULL,
-  authors jsonb NOT NULL DEFAULT '[]',
-  published_at date,
-  source_metadata jsonb NOT NULL DEFAULT '{}',
-  fetched_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (project_id, doi),
-  UNIQUE (project_id, arxiv_id)
-);
-
--- ── 6. Indexes ───────────────────────────────────────────────────────────
+-- ── 5. Indexes ───────────────────────────────────────────────────────────
 
 CREATE INDEX ON research_entities (project_id, entity_kind);
 CREATE INDEX ON research_relations (project_id, from_entity_id);
@@ -239,8 +205,8 @@ CREATE INDEX ON canvas_deltas (canvas_id, to_version);
 CREATE INDEX ON agent_messages (thread_id, created_at);
 CREATE INDEX ON agent_runs (status, lease_expires_at) WHERE status IN ('queued', 'running');
 
--- ── 7. RLS ───────────────────────────────────────────────────────────────
+-- ── 6. RLS ───────────────────────────────────────────────────────────────
 -- See docs/spec/01-database-schema.md §0-4 and ADR 0013 for the full
 -- coresearch_app (SET LOCAL app.current_user_id) / authenticated (auth.uid())
 -- split. Enabling + the per-table policies is left to a follow-up migration
--- (ticket 02) so this file stays reviewable as "tables only".
+-- (ticket 03) so this file stays reviewable as "tables only".

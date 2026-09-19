@@ -32,7 +32,11 @@ import { useResizableWidth } from '../../lib/useResizableWidth'
 import { ResizeHandle } from '../Layout/ResizeHandle'
 import { EntityCard } from '../Nodes/EntityCard'
 
-import type { OpenProjectIntent } from '../../App'
+export interface OpenProjectIntent {
+  title?: string
+  /** Canvas node to select, centre and open in the detail panel. */
+  focusNodeId?: string | null
+}
 
 type OpenProject = (intent?: OpenProjectIntent) => void
 

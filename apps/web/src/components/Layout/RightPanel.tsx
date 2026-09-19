@@ -1,21 +1,34 @@
 import clsx from 'clsx'
 import { Link2, Send, Sparkles } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
+import { cancelRun, createRun, createThread } from '../../api/agent'
+import { listCandidates, type CandidatePart } from '../../api/candidates'
+import { acceptProposal, listProposals, rejectProposal, type ProposalRecord } from '../../api/proposals'
+import { useAgentRunStream } from '../../hooks/useAgentRunStream'
 import { getAccentTokens, resolveAccent } from '../../lib/accent'
 import { NODE_VISUALS } from '../../lib/nodeVisuals'
 import type { CrEntityNode } from '../../data/seedGraph'
+import { CandidateCard } from '../Candidates/CandidateCard'
+import { ProposalCard } from '../Proposals/ProposalCard'
 import { SeedDetailPanel } from './SeedDetailPanel'
 
 interface RightPanelProps {
   selectedNode: CrEntityNode | null
   detailRequested: number
+  projectId?: string
+  onResearchChanged?: () => void
 }
 
 // Detail Surface section order, ported from
 // docs/design/canvas/huabu-node-presentation-and-links.md §6.
-export function RightPanel({ selectedNode, detailRequested }: RightPanelProps) {
-  const [tab, setTab] = useState<'chat' | 'detail'>('chat')
+export function RightPanel({
+  selectedNode,
+  detailRequested,
+  projectId,
+  onResearchChanged,
+}: RightPanelProps) {
+  const [tab, setTab] = useState<'chat' | 'detail' | 'review'>('chat')
 
   useEffect(() => {
     if (detailRequested > 0) setTab('detail')
@@ -24,7 +37,7 @@ export function RightPanel({ selectedNode, detailRequested }: RightPanelProps) {
   return (
     <div className="bg-surface border-edge-default flex h-full w-full flex-col border-l">
       <div className="border-edge-default flex border-b">
-        {(['chat', 'detail'] as const).map((t) => (
+        {(['chat', 'review', 'detail'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -33,17 +46,96 @@ export function RightPanel({ selectedNode, detailRequested }: RightPanelProps) {
               tab === t ? 'text-fg-default border-info border-b-2' : 'text-fg-subtle',
             )}
           >
-            {t === 'chat' ? 'Agent' : 'Detail'}
+            {t === 'chat' ? 'Agent' : t === 'review' ? 'Review' : 'Detail'}
           </button>
         ))}
       </div>
 
-      {tab === 'chat' ? <ChatTab node={selectedNode} /> : <DetailTab node={selectedNode} />}
+      {tab === 'chat' ? (
+        <ChatTab node={selectedNode} projectId={projectId} />
+      ) : tab === 'review' ? (
+        <ReviewTab projectId={projectId} onResearchChanged={onResearchChanged} />
+      ) : (
+        <DetailTab node={selectedNode} />
+      )}
     </div>
   )
 }
 
-function ChatTab({ node }: { node: CrEntityNode | null }) {
+function ChatTab({
+  node,
+  projectId,
+}: {
+  node: CrEntityNode | null
+  projectId?: string
+}) {
+  const [candidates, setCandidates] = useState<CandidatePart[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [threadId, setThreadId] = useState<string | null>(null)
+  const [runId, setRunId] = useState<string | null>(null)
+  const [prompt, setPrompt] = useState('')
+  const [streamText, setStreamText] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const refreshCandidates = useCallback(async (pid: string) => {
+    const listed = await listCandidates(pid)
+    setCandidates(listed.candidates)
+  }, [])
+
+  useEffect(() => {
+    if (!projectId) return
+    let cancelled = false
+    refreshCandidates(projectId).catch((err: unknown) => {
+      if (!cancelled) {
+        setLoadError(err instanceof Error ? err.message : String(err))
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, refreshCandidates])
+
+  const onStreamEvent = useCallback(
+    (type: string, payload: unknown) => {
+      if (type === 'message.delta') {
+        const rec = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+        const inner = rec.assistantMessageEvent
+        const delta =
+          inner && typeof inner === 'object' && 'delta' in inner
+            ? String((inner as { delta?: unknown }).delta ?? '')
+            : ''
+        if (delta) setStreamText((prev) => prev + delta)
+      }
+      if (type === 'message.completed' || type === 'tool.completed' || type === 'run.completed') {
+        if (projectId) void refreshCandidates(projectId)
+      }
+    },
+    [projectId, refreshCandidates],
+  )
+  useAgentRunStream(runId, onStreamEvent)
+
+  async function send() {
+    if (!projectId || !prompt.trim() || sending) return
+    setSending(true)
+    setLoadError(null)
+    setStreamText('')
+    try {
+      let tid = threadId
+      if (!tid) {
+        const created = await createThread(projectId)
+        tid = created.threadId
+        setThreadId(tid)
+      }
+      const run = await createRun(tid, prompt.trim())
+      setRunId(run.runId)
+      setPrompt('')
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSending(false)
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex-1 overflow-y-auto p-3 text-[12.5px]">
@@ -55,19 +147,132 @@ function ChatTab({ node }: { node: CrEntityNode | null }) {
             ? `Selected "${node.data.title}". Ask me to expand, connect, or draft a hypothesis from this ${node.data.entityKind}.`
             : 'Select a node on the canvas to bring it into context, or ask a question about the research space.'}
         </div>
+        {streamText ? (
+          <p className="text-fg-muted mb-2 whitespace-pre-wrap">{streamText}</p>
+        ) : null}
+        {loadError ? <p className="text-danger mb-2">{loadError}</p> : null}
+        {candidates.map((candidate) => (
+          <div key={candidate.candidateId} className="mb-2">
+            <CandidateCard candidate={candidate} />
+          </div>
+        ))}
       </div>
       <div className="border-edge-default border-t p-2">
         <div className="bg-bg-default border-edge-default flex items-end gap-1.5 rounded-lg border p-1.5">
           <textarea
             rows={2}
             placeholder="Ask the agent…"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                void send()
+              }
+            }}
             className="text-fg-default placeholder:text-fg-subtle flex-1 resize-none bg-transparent px-1 text-[12.5px] outline-none"
           />
-          <button className="bg-info flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white">
+          {runId ? (
+            <button
+              type="button"
+              onClick={() => {
+                void cancelRun(runId).catch((err: unknown) => {
+                  setLoadError(err instanceof Error ? err.message : String(err))
+                })
+              }}
+              className="text-fg-muted h-7 shrink-0 px-1.5 text-[11px]"
+            >
+              Cancel
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={sending || !prompt.trim()}
+            onClick={() => void send()}
+            className="bg-info flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white disabled:opacity-50"
+          >
             <Send size={13} />
           </button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function ReviewTab({
+  projectId,
+  onResearchChanged,
+}: {
+  projectId?: string
+  onResearchChanged?: () => void
+}) {
+  const [proposals, setProposals] = useState<ProposalRecord[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [busyId, setBusyId] = useState<string | null>(null)
+
+  const refresh = useCallback(async (pid: string) => {
+    const listed = await listProposals(pid, 'pending')
+    setProposals(listed.proposals)
+  }, [])
+
+  useEffect(() => {
+    if (!projectId) return
+    let cancelled = false
+    refresh(projectId).catch((err: unknown) => {
+      if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [projectId, refresh])
+
+  async function onAccept(id: string) {
+    setBusyId(id)
+    setLoadError(null)
+    try {
+      await acceptProposal(id)
+      if (projectId) await refresh(projectId)
+      onResearchChanged?.()
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function onReject(id: string) {
+    setBusyId(id)
+    setLoadError(null)
+    try {
+      await rejectProposal(id)
+      if (projectId) await refresh(projectId)
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto p-3 text-[12.5px]">
+      <p className="text-fg-subtle mb-2 text-[11px]">
+        Idea Meta Space — pending revisions stay off the canvas until you accept them.
+      </p>
+      {loadError ? <p className="text-danger mb-2">{loadError}</p> : null}
+      {proposals.length === 0 ? (
+        <p className="text-fg-subtle">No pending proposals.</p>
+      ) : (
+        proposals.map((proposal) => (
+          <div key={proposal.id} className="mb-2">
+            <ProposalCard
+              proposal={proposal}
+              busy={busyId === proposal.id}
+              onAccept={(id) => void onAccept(id)}
+              onReject={(id) => void onReject(id)}
+            />
+          </div>
+        ))
+      )}
     </div>
   )
 }
