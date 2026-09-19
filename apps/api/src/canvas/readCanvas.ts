@@ -85,16 +85,46 @@ export async function readCanvas(
     };
   });
 
+  const relations = await db.query<{
+    id: string;
+    source: string;
+    target: string;
+    relation_kind: string;
+  }>(
+    `SELECT r.id, pf.node_id AS source, pt.node_id AS target, r.relation_kind
+       FROM research_relations r
+       JOIN canvas_projections pf
+         ON pf.entity_id = r.from_entity_id AND pf.canvas_id = $1::uuid
+       JOIN canvas_projections pt
+         ON pt.entity_id = r.to_entity_id AND pt.canvas_id = $1::uuid`,
+    [canvasId],
+  );
+  const canvasEdges = graph.edges.map((e) => ({
+    id: e.id,
+    source: e.source,
+    target: e.target,
+  }));
+  const seen = new Set(canvasEdges.map((e) => `${e.source}->${e.target}`));
+  const virtual = relations.rows.flatMap((rel) => {
+    const key = `${rel.source}->${rel.target}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [
+      {
+        id: rel.id,
+        source: rel.source,
+        target: rel.target,
+        edgeType: rel.relation_kind,
+      },
+    ];
+  });
+
   return {
     canvasId: row.id,
     projectId: row.project_id,
     projectTitle: row.project_title,
     version: graph.version,
     nodes,
-    edges: graph.edges.map((e) => ({
-      id: e.id,
-      source: e.source,
-      target: e.target,
-    })),
+    edges: [...canvasEdges, ...virtual],
   };
 }

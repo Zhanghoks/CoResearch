@@ -5,10 +5,7 @@
 // `withRequestContext()` — see ADR 0013: `SET LOCAL app.current_user_id`
 // must be scoped to the same transaction, never a bare pooled `SET`.
 //
-// Still to add as their tickets land:
-//   /api/projects/:id/research, /candidates/:id/accept, /proposals  — §2
-//   /api/canvases/:id/execute, /deltas                              — §3
-//   /api/threads/:id, /runs/:id/stream, /runs/:id/cancel            — §4
+// Routes live in app.ts (docs/spec/02).
 
 import cors from "@fastify/cors";
 

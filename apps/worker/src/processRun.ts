@@ -12,6 +12,7 @@ import {
   persistSessionEntries,
   proposeCandidate,
   proposeRevision,
+  readResearchState,
   type ClaimedRun,
   type SqlQuery,
 } from "@coresearch/research";
@@ -87,6 +88,8 @@ export async function processRun(
         changes: input.changes,
         rationale: input.rationale,
       }),
+    inspectResearchState: (input) =>
+      readResearchState(db, run.projectId, input),
   };
 
   const createSession = opts.createSession ?? createCoResearchAgentSession;
@@ -105,6 +108,16 @@ export async function processRun(
   session.subscribe((event) => {
     const adapted = adaptPiEvent(event);
     if (adapted) void opts.publish(run.id, adapted);
+    if (
+      adapted?.type === "message.completed" ||
+      adapted?.type === "tool.completed"
+    ) {
+      void persistSessionEntries(
+        db,
+        run.threadId,
+        session.sessionManager.getEntries() as unknown[],
+      );
+    }
   });
 
   const workerId = opts.workerId ?? run.leaseOwner;

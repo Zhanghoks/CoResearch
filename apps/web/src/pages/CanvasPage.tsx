@@ -5,7 +5,7 @@
 // triggers GET .../deltas catch-up (ADR 0002).
 
 import { applyDeltas, type Delta } from '@coresearch/engine'
-import { nextSyncAction, type WireCanvasNode } from '@coresearch/shared'
+import { type WireCanvasNode } from '@coresearch/shared'
 import { useEdgesState, useNodesState, type Edge } from '@xyflow/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -18,7 +18,7 @@ import { Header } from '../components/Layout/Header'
 import { LeftPanel } from '../components/Layout/LeftPanel'
 import { ResizeHandle } from '../components/Layout/ResizeHandle'
 import { RightPanel } from '../components/Layout/RightPanel'
-import { supabase } from '../lib/supabase'
+import { useCanvasSync } from '../hooks/useCanvasSync'
 import { useResizableWidth } from '../lib/useResizableWidth'
 import { AppLoadingScreen } from './AppLoadingScreen'
 
@@ -105,6 +105,7 @@ export default function CanvasPage() {
             id: e.id,
             source: e.source,
             target: e.target,
+            type: e.edgeType,
           })),
         )
         versionRef.current = loaded.version
@@ -124,42 +125,12 @@ export default function CanvasPage() {
     }
   }, [canvasId, setEdges, setNodes])
 
-  useEffect(() => {
-    if (!canvasId) return
-    const channel = supabase
-      .channel(`canvas-deltas:${canvasId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'canvas_deltas',
-          filter: `canvas_id=eq.${canvasId}`,
-        },
-        (payload) => {
-          const row = payload.new as {
-            from_version: number
-            to_version: number
-            deltas: unknown
-          }
-          const action = nextSyncAction(
-            versionRef.current,
-            Number(row.from_version),
-            Number(row.to_version),
-          )
-          if (action === 'ignore') return
-          if (action === 'apply') {
-            applyRemoteDeltas(asDeltas(row.deltas), Number(row.to_version))
-            return
-          }
-          void catchUp(canvasId)
-        },
-      )
-      .subscribe()
-    return () => {
-      void supabase.removeChannel(channel)
-    }
-  }, [applyRemoteDeltas, canvasId, catchUp])
+  useCanvasSync(canvasId, versionRef, {
+    apply: (deltas, toVersion) => applyRemoteDeltas(asDeltas(deltas), toVersion),
+    catchUp: (id) => {
+      void catchUp(id)
+    },
+  })
 
   async function run(commands: Parameters<typeof executeCanvas>[1]) {
     if (!canvasId) return

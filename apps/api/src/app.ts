@@ -18,6 +18,7 @@ import {
   listProposals,
   ProposalConflictError,
   ProposalNotFoundError,
+  readResearchState,
   rejectProposal,
   requestRunCancel,
 } from "@coresearch/research";
@@ -110,6 +111,17 @@ export function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): Fastif
     api.get("/api/projects", async (request) => {
       return deps.withRequestContext({ userId: request.userId }, (db) =>
         listProjects(db),
+      );
+    });
+
+    api.get("/api/projects/:projectId/research", async (request) => {
+      const { projectId } = request.params as { projectId: string };
+      const query = request.query as { kind?: string; status?: string };
+      return deps.withRequestContext({ userId: request.userId }, (db) =>
+        readResearchState(db, projectId, {
+          kind: query.kind,
+          status: query.status,
+        }),
       );
     });
 

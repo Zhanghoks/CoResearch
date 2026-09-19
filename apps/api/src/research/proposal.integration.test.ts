@@ -176,6 +176,13 @@ describe("Track B proposals (ticket 09)", () => {
     assert.equal(canvas.nodes[0].id, body.nodeId);
     assert.equal(canvas.nodes[0].data.summary, "revised after a literature pass");
     assert.equal(canvas.nodes[0].data.entityRef.refRevision, 2);
+
+    const research = await app.inject({
+      method: "GET",
+      url: `/api/projects/${projectId}/research`,
+      headers,
+    });
+    assert.equal(research.json().entities[0].currentRevision, 2);
   });
 
   it("rejects accept when baseStateRevision does not match", async () => {

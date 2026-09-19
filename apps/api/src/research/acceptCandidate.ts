@@ -191,6 +191,24 @@ export async function acceptCandidate(
       [created.id, input.canvasId, entity.id],
     );
 
+    await db.query(
+      `UPDATE agent_messages
+          SET payload = jsonb_set(
+            payload,
+            '{message,details,materialized}',
+            $2::jsonb,
+            true
+          )
+        WHERE id = $1::uuid`,
+      [
+        input.candidateId,
+        JSON.stringify({
+          entityId: entity.id,
+          at: new Date().toISOString(),
+        }),
+      ],
+    );
+
     return {
       entityId: entity.id,
       nodeId: created.id,

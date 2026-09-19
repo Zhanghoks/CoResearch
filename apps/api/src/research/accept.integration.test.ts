@@ -132,6 +132,25 @@ describe("POST /api/projects/:id/candidates/:id/accept", () => {
     });
     assert.equal(listed.json().candidates.length, 1);
     assert.equal(listed.json().candidates[0].candidateId, candidate.candidateId);
+
+    const message = await db.query<{ payload: { message?: { details?: { materialized?: { entityId?: string } } } } }>(
+      "SELECT payload FROM agent_messages WHERE id = $1::uuid",
+      [candidate.candidateId],
+    );
+    assert.equal(
+      message.rows[0]?.payload.message?.details?.materialized?.entityId,
+      body.entityId,
+    );
+
+    const research = await app.inject({
+      method: "GET",
+      url: `/api/projects/${projectId}/research`,
+      headers,
+    });
+    assert.equal(research.statusCode, 200);
+    assert.equal(research.json().entities.length, 1);
+    assert.equal(research.json().entities[0].id, body.entityId);
+    assert.deepEqual(research.json().relations, []);
   });
 
   it("is idempotent on the unique source_candidate_id", async () => {

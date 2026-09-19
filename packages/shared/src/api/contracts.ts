@@ -117,6 +117,33 @@ export interface CandidateList {
   candidates: CandidatePart[];
 }
 
+export interface ResearchEntityRecord {
+  id: string;
+  projectId: string;
+  entityKind: string;
+  currentRevision: number;
+  contentHash: string;
+  status: string;
+  origin: string;
+  confirmed: boolean;
+  stale: string | null;
+  summary: string | null;
+  payload: unknown;
+}
+
+export interface ResearchRelationRecord {
+  id: string;
+  projectId: string;
+  fromEntityId: string;
+  toEntityId: string;
+  relationKind: string;
+}
+
+export interface ResearchState {
+  entities: ResearchEntityRecord[];
+  relations: ResearchRelationRecord[];
+}
+
 /** Body of `POST /api/projects/:projectId/candidates/:candidateId/accept`. */
 export interface AcceptCandidateBody {
   canvasId: string;
