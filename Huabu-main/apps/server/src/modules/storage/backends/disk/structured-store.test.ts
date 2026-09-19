@@ -1,0 +1,304 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT license.
+
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+const workspaceState = vi.hoisted(() => ({ path: '' }));
+
+vi.mock('../../../workspace.js', () => ({
+  getWorkspacePath: () => workspaceState.path,
+}));
+
+import { refreshCanvasDirIndex } from './canvas-dirs.js';
+import { tasksPath } from './layout.js';
+import {
+  getCanvasStore,
+  resetStorageCache,
+} from './legacy/canvas-store-cache.js';
+import { DiskStructuredStore } from './structured-store.js';
+import { toSafeFilename } from '../../../../utils/naming.js';
+import { describeSpaceLogsContract } from '../../ports/contracts/space-logs.contract.js';
+import { describeSpaceTasksContract } from '../../ports/contracts/space-tasks.contract.js';
+import { describeStructuredStoreContract } from '../../ports/contracts/structured-store.contract.js';
+
+import type { CanvasFile } from '../../../canvas/persistence-types.js';
+
+/**
+ * Seed a Space directly on disk.
+ *
+ * Deliberately not via the compatibility facade: an adapter test that reached
+ * for `createCanvas` would make the Disk backend's own suite depend on the
+ * layer that is supposed to be removable.
+ *
+ * The directory is named exactly `toSafeFilename(title, id)` so `read()`'s
+ * Finder-rename self-heal sees nothing to reconcile and the fixture stays put.
+ */
+function seedSpace(root: string, canvasId: string, title: string): CanvasFile {
+  const dir = path.join(root, toSafeFilename(title, canvasId));
+  mkdirSync(dir, { recursive: true });
+  const record: CanvasFile = {
+    canvasId,
+    title,
+    version: 0,
+    state: { nodes: [], edges: [] },
+    createdAt: 1,
+    updatedAt: 1,
+  };
+  writeFileSync(path.join(dir, 'space.json'), JSON.stringify(record), 'utf8');
+  refreshCanvasDirIndex();
+  return record;
+}
+
+function freshWorkspace(prefix: string): string {
+  const root = mkdtempSync(path.join(tmpdir(), prefix));
+  workspaceState.path = root;
+  resetStorageCache();
+  return root;
+}
+
+describeStructuredStoreContract('DiskStructuredStore', () => {
+  const root = freshWorkspace('huabu-structured-');
+  return {
+    store: new DiskStructuredStore(),
+    cleanup: () => {
+      resetStorageCache();
+      rmSync(root, { recursive: true, force: true });
+    },
+  };
+});
+
+describeSpaceLogsContract('Disk Space logs', () => {
+  const root = freshWorkspace('huabu-log-repo-');
+  seedSpace(root, 'canvas-a', 'Canvas A');
+  const store = new DiskStructuredStore();
+  const handle = store.space('canvas-a');
+  const concurrent = store.space('canvas-a');
+  return {
+    events: handle.events,
+    changes: handle.changes,
+    concurrent: {
+      events: concurrent.events,
+      changes: concurrent.changes,
+    },
+    cleanup: () => {
+      resetStorageCache();
+      rmSync(root, { recursive: true, force: true });
+    },
+  };
+});
+
+describe('Disk Space extension workspace binding', () => {
+  it('resolves atomically in the Workspace where the operation began', async () => {
+    const firstRoot = freshWorkspace('huabu-extension-workspace-a-');
+    seedSpace(firstRoot, 'shared-id', 'First');
+    const retained = new DiskStructuredStore().space('shared-id');
+
+    // Start the operation in A, then switch before its Promise continuation.
+    // The result must stay in A rather than using B's process-global layout.
+    const pending = retained.extension('test.owner');
+    const secondRoot = freshWorkspace('huabu-extension-workspace-b-');
+    refreshCanvasDirIndex();
+
+    try {
+      const substrate = await pending;
+      expect(substrate?.kind).toBe('disk');
+      if (substrate?.kind !== 'disk')
+        throw new Error('Expected Disk substrate');
+      expect(substrate?.directory.startsWith(`${firstRoot}${path.sep}`)).toBe(
+        true,
+      );
+      expect(readdirSync(secondRoot)).toEqual([]);
+    } finally {
+      workspaceState.path = firstRoot;
+      resetStorageCache();
+      refreshCanvasDirIndex();
+      rmSync(firstRoot, { recursive: true, force: true });
+      rmSync(secondRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describeSpaceTasksContract('Disk', () => {
+  const root = freshWorkspace('huabu-task-contract-');
+  seedSpace(root, 'canvas-task', 'Canvas Task');
+  const store = new DiskStructuredStore();
+  return {
+    tasks: store.space('canvas-task').tasks,
+    concurrent: store.space('canvas-task').tasks,
+    canvasId: 'canvas-task',
+    missing: store.space('missing-canvas').tasks,
+    missingCanvasId: 'missing-canvas',
+    beginDelete: async () => {
+      const result = await store.spaces().beginDelete({
+        canvasId: 'canvas-task',
+      });
+      if (!result.ok) throw new Error('Ordinary Space must be deletable');
+      return result.session;
+    },
+    cleanup: () => {
+      resetStorageCache();
+      rmSync(root, { recursive: true, force: true });
+    },
+  };
+});
+
+describe('Disk Space Tasks', () => {
+  let root = '';
+  let store: DiskStructuredStore;
+
+  beforeAll(() => {
+    root = freshWorkspace('huabu-task-repo-');
+    seedSpace(root, 'canvas-task', 'Canvas Task');
+    seedSpace(root, 'canvas-empty', 'Canvas Empty');
+    store = new DiskStructuredStore();
+  });
+
+  afterAll(() => {
+    resetStorageCache();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('fails fast on malformed and internally inconsistent Task stores', async () => {
+    mkdirSync(path.dirname(tasksPath('canvas-task')), { recursive: true });
+    writeFileSync(tasksPath('canvas-task'), '{"version":1,"tasks":{}}');
+    await expect(store.space('canvas-task').tasks.read()).rejects.toThrow(
+      /Invalid Task store/,
+    );
+
+    writeFileSync(
+      tasksPath('canvas-task'),
+      JSON.stringify({
+        version: 1,
+        tasks: [
+          {
+            taskId: 'task-duplicate',
+            canvasId: 'canvas-task',
+            goal: 'Goal',
+            defaultRootProfileId: 'profile-a',
+            anchorNodeId: 'node-a',
+            createdAt: 1,
+          },
+          {
+            taskId: 'task-duplicate',
+            canvasId: 'canvas-task',
+            goal: 'Goal',
+            defaultRootProfileId: 'profile-a',
+            anchorNodeId: 'node-b',
+            createdAt: 2,
+          },
+        ],
+        runs: [],
+      }),
+    );
+    await expect(store.space('canvas-task').tasks.read()).rejects.toThrow(
+      /duplicate Task/,
+    );
+
+    writeFileSync(
+      tasksPath('canvas-task'),
+      JSON.stringify({
+        version: 1,
+        tasks: [],
+        runs: [
+          {
+            runId: 'run-orphan',
+            taskId: 'task-missing',
+            canvasIdSnapshot: 'canvas-task',
+            goalSnapshot: 'Goal',
+            rootProfileIdSnapshot: 'profile-a',
+            status: 'pending',
+            createdAt: 1,
+          },
+        ],
+      }),
+    );
+    await expect(store.space('canvas-task').tasks.read()).rejects.toThrow(
+      /references missing Task/,
+    );
+  });
+
+  it('rejects a retained handle after the active Workspace changes', async () => {
+    const retained = store.space('canvas-empty').tasks;
+    const replacement = freshWorkspace('huabu-task-repo-next-');
+
+    await expect(retained.read()).rejects.toThrow(/inactive workspace/);
+
+    workspaceState.path = root;
+    resetStorageCache();
+    rmSync(replacement, { recursive: true, force: true });
+  });
+});
+
+/**
+ * Instance caching is a Disk adapter detail, so it is asserted here rather
+ * than in the portable contract — including its limit, so the bound stays
+ * visible if anyone is tempted to promise stable identity again.
+ */
+describe('DiskStructuredStore instance caching', () => {
+  let root = '';
+
+  beforeAll(() => {
+    root = freshWorkspace('huabu-structured-cache-');
+  });
+
+  afterAll(() => {
+    resetStorageCache();
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('reuses one underlying instance per id, up to the cache bound', () => {
+    const first = getCanvasStore('canvas-a');
+    expect(getCanvasStore('canvas-a')).toBe(first);
+
+    // The instance cache is bounded, so a working set larger than the cache
+    // evicts the oldest entry and the next call builds a fresh instance.
+    // Callers must not treat a Space as a durable per-process singleton; see
+    // the `space()` docs on `StructuredStore`.
+    for (let i = 0; i < 20; i += 1) getCanvasStore(`filler-${i}`);
+
+    const afterEviction = getCanvasStore('canvas-a');
+    expect(afterEviction).not.toBe(first);
+    expect(afterEviction.canvasId).toBe('canvas-a');
+  });
+
+  it('builds a fresh composite per call without caching one of its own', () => {
+    const store = new DiskStructuredStore();
+    const a = store.space('canvas-b');
+    const b = store.space('canvas-b');
+
+    // A second cache would have to be invalidated in lockstep with the
+    // legacy one — `resetStorageCache()` clears only that map — so the
+    // composite is deliberately rebuilt each call over the cached instance.
+    expect(b).not.toBe(a);
+    expect(b.canvasId).toBe(a.canvasId);
+  });
+
+  it('exposes frozen, runtime-narrow log-backed parts', () => {
+    const handle = new DiskStructuredStore().space('canvas-c');
+    const runtime = handle as unknown as Record<string, unknown>;
+
+    expect(runtime['logs']).toBeUndefined();
+    expect(Object.keys(handle.events)).toEqual(['read', 'append']);
+    expect(Object.keys(handle.changes)).toEqual(['read', 'append', 'delete']);
+    expect(Object.keys(handle.tasks.runs)).toEqual([
+      'create',
+      'update',
+      'complete',
+    ]);
+
+    for (const part of [handle.events, handle.changes, handle.tasks.runs]) {
+      expect(Object.isFrozen(part)).toBe(true);
+      expect('store' in part).toBe(false);
+    }
+  });
+});
