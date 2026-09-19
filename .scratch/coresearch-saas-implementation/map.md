@@ -38,7 +38,8 @@ Milestone 1 = 07 + 08 都绿
 
 - [01](issues/01-monorepo-and-locked-schema.md) resolved：pnpm workspace + 锁定的 15 张表 migration 在托管项目 `bpxlnucpdmunyvwjpjov` 上跑通。
 - [02](issues/02-canvas-engine-core.md) resolved：`packages/engine` 移植 executor + CREATE_NODES/DELETE_NODES + delta/invert + preAssignIds，测试 10/10。
-- [03](issues/03-request-context-and-rls.md) resolved：`withRequestContext` + 15 张表 RLS 已应用到托管项目；跨租户查询被拦。Frontier 现在是 [04](issues/04-auth-project-primary-canvas.md)。
+- [03](issues/03-request-context-and-rls.md) resolved：`withRequestContext` + 15 张表 RLS 已应用到托管项目；跨租户查询被拦。
+- [04](issues/04-auth-project-primary-canvas.md) resolved：Supabase JWT 验签 + `POST/GET /api/projects` + `GET /api/canvases/:canvasId`（空画布）；Web 外壳照搬 Huabu `apps/web` 改装（router/guard/store/api client）。真实浏览器 magic-link 往返未验证（本会话无 Supabase 凭证）。Frontier 现在是 [05](issues/05-note-editing-realtime-catchup.md)。
 
 ## Not yet specified
 

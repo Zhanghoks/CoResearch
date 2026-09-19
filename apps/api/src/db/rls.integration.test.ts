@@ -1,12 +1,9 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import { describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
 
-import { PGlite } from "@electric-sql/pglite";
+import type { PGlite } from "@electric-sql/pglite";
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../..");
+import { createUser, freshDb } from "../test/pgliteHarness.js";
 
 const userA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const userB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -14,30 +11,13 @@ const projectA = "11111111-1111-1111-1111-111111111111";
 const projectB = "22222222-2222-2222-2222-222222222222";
 
 async function setup(): Promise<PGlite> {
-  const db = new PGlite();
+  // Migration loading and the Supabase runtime stubs live in the shared
+  // harness so a migration change is picked up by every integration test
+  // at once rather than needing the same edit in each file.
+  const db = await freshDb();
+  await createUser(db, userA);
+  await createUser(db, userB);
   await db.exec(`
-    CREATE SCHEMA IF NOT EXISTS auth;
-    CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);
-    CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid
-      LANGUAGE sql STABLE AS $$
-        SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;
-      $$;
-    CREATE ROLE authenticated NOLOGIN;
-    CREATE PUBLICATION supabase_realtime;
-    -- rls.sql GRANTs coresearch_app TO postgres; PGlite's login role is postgres.
-  `);
-  const init = readFileSync(
-    path.join(root, "supabase/migrations/00000000000001_init.sql"),
-    "utf8",
-  );
-  const rls = readFileSync(
-    path.join(root, "supabase/migrations/00000000000002_rls.sql"),
-    "utf8",
-  );
-  await db.exec(init);
-  await db.exec(rls);
-  await db.exec(`
-    INSERT INTO auth.users (id) VALUES ('${userA}'::uuid), ('${userB}'::uuid);
     INSERT INTO projects (id, owner_user_id, title)
       VALUES
         ('${projectA}'::uuid, '${userA}'::uuid, 'A'),

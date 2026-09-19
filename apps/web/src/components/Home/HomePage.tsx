@@ -32,7 +32,11 @@ import { useResizableWidth } from '../../lib/useResizableWidth'
 import { ResizeHandle } from '../Layout/ResizeHandle'
 import { EntityCard } from '../Nodes/EntityCard'
 
-import type { OpenProjectIntent } from '../../App'
+export interface OpenProjectIntent {
+  title?: string
+  /** Canvas node to select, centre and open in the detail panel. */
+  focusNodeId?: string | null
+}
 
 type OpenProject = (intent?: OpenProjectIntent) => void
 
@@ -42,13 +46,24 @@ interface HomePageProps {
   onOpenProject: OpenProject
   /** Open the standalone, full-page introduction for one node type. */
   onViewNode: (kind: ResearchEntityKind) => void
+  /** Leave the prototype and return to the real project list. */
+  onExit: () => void
 }
 
-export function HomePage({ onOpenProject, onViewNode }: HomePageProps) {
+export function HomePage({ onOpenProject, onViewNode, onExit }: HomePageProps) {
   return (
     <div className="bg-bg-default text-fg-default flex h-full w-full">
       <Sidebar onOpenProject={onOpenProject} />
       <main className="min-w-0 flex-1 overflow-y-auto">
+        <div className="border-border-default flex items-center justify-between border-b px-6 py-2">
+          <span className="text-fg-muted text-xs">静态原型（非真实数据）</span>
+          <button
+            onClick={onExit}
+            className="text-fg-muted hover:text-fg-default text-xs underline underline-offset-4"
+          >
+            返回我的项目
+          </button>
+        </div>
         <Hero onOpenProject={onOpenProject} />
         <HowItWorks />
         <NodeGallery onOpenProject={onOpenProject} onViewNode={onViewNode} />

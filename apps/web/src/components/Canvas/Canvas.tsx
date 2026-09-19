@@ -18,7 +18,7 @@ import { PaperNode, type PaperNode as PaperNodeType } from '../Nodes/PaperNode'
 
 const nodeTypes = { crEntity: CrEntityNode, frame: FrameNode, paper: PaperNode }
 
-type CanvasNode = CrEntityNodeType | FrameNodeType | PaperNodeType
+export type CanvasNode = CrEntityNodeType | FrameNodeType | PaperNodeType
 
 interface CanvasProps {
   nodes: CanvasNode[]
