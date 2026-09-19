@@ -41,7 +41,8 @@ Milestone 1 = 07 + 08 都绿
 - [03](issues/03-request-context-and-rls.md) resolved：`withRequestContext` + 15 张表 RLS 已应用到托管项目；跨租户查询被拦。
 - [04](issues/04-auth-project-primary-canvas.md) resolved：Supabase JWT 验签 + `POST/GET /api/projects` + `GET /api/canvases/:canvasId`（空画布）；Web 外壳照搬 Huabu `apps/web` 改装（router/guard/store/api client）。真实浏览器 magic-link 往返未验证（本会话无 Supabase 凭证）。
 - [05](issues/05-note-editing-realtime-catchup.md) resolved：note 的 create/move/edit/delete 走 `/execute` + advisory lock + `canvas_deltas`；catch-up 端点和 `nextSyncAction` 已测。双标签页 Realtime 代码已接，未在真实浏览器验证。
-- [06](issues/06-deterministic-candidate-accept.md) resolved：fixture `CandidatePart` → accept 单事务物化 entity+revision+crEntity+projection+delta；幂等与回滚已测。GET overlay 经 `canvas_projections`。Frontier 现在是 [07](issues/07-research-managed-node-ownership.md) 和 [08](issues/08-pi-agent-candidate.md)（可并行）。
+- [06](issues/06-deterministic-candidate-accept.md) resolved：fixture `CandidatePart` → accept 单事务物化 entity+revision+crEntity+projection+delta；幂等与回滚已测。GET overlay 经 `canvas_projections`。
+- [07](issues/07-research-managed-node-ownership.md) resolved：`executeFromRequest` / `executeAsProjector` 双入口；owned MERGE → `invalid-scope`；`userNote` 可写；投影器刷新同一 nodeId、几何不动。Frontier 现在是 [08](issues/08-pi-agent-candidate.md)。
 
 ## Not yet specified
 
