@@ -23,6 +23,16 @@ import {
   insertFixtureCandidate,
   listCandidates,
 } from "./research/candidates.js";
+import {
+  createRun,
+  createThread,
+  listThreadMessages,
+  runVisibleToUser,
+} from "./agent/threads.js";
+import {
+  createMemoryStreamBus,
+  type AgentStreamBus,
+} from "./agent/streamBus.js";
 
 import type { AcceptCandidateBody, CanvasCommand } from "@coresearch/shared";
 
@@ -36,6 +46,8 @@ export type RunInRequestContext = <T>(
 export type AppDeps = {
   auth: AuthConfig;
   withRequestContext: RunInRequestContext;
+  /** Defaults to an in-process bus; production can pass a LISTEN/NOTIFY bus. */
+  streamBus?: AgentStreamBus;
 };
 
 declare module "fastify" {
@@ -46,6 +58,7 @@ declare module "fastify" {
 
 export function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): FastifyInstance {
   const app = Fastify({ logger: opts.logger ?? false });
+  const streamBus = deps.streamBus ?? createMemoryStreamBus();
 
   app.get("/healthz", async () => ({ ok: true }));
 
@@ -185,6 +198,77 @@ export function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): Fastif
         return reply.code(404).send({ error: "canvas not found" });
       }
       return result;
+    });
+
+    api.post("/api/projects/:projectId/threads", async (request, reply) => {
+      const { projectId } = request.params as { projectId: string };
+      const created = await deps.withRequestContext(
+        { userId: request.userId },
+        (db) => createThread(db, projectId),
+      );
+      if (!created) {
+        return reply.code(404).send({ error: "project not found" });
+      }
+      return reply.code(201).send(created);
+    });
+
+    api.post("/api/threads/:threadId/runs", async (request, reply) => {
+      const { threadId } = request.params as { threadId: string };
+      const body = (request.body ?? {}) as { prompt?: unknown };
+      const prompt = typeof body.prompt === "string" ? body.prompt.trim() : "";
+      if (!prompt) {
+        return reply.code(400).send({ error: "prompt is required" });
+      }
+      const created = await deps.withRequestContext(
+        { userId: request.userId },
+        (db) => createRun(db, threadId, prompt),
+      );
+      if (!created) {
+        return reply.code(404).send({ error: "thread not found" });
+      }
+      return reply.code(201).send(created);
+    });
+
+    api.get("/api/threads/:threadId/messages", async (request, reply) => {
+      const { threadId } = request.params as { threadId: string };
+      const list = await deps.withRequestContext(
+        { userId: request.userId },
+        (db) => listThreadMessages(db, threadId),
+      );
+      if (!list) {
+        return reply.code(404).send({ error: "thread not found" });
+      }
+      return list;
+    });
+
+    api.get("/api/runs/:runId/stream", async (request, reply) => {
+      const { runId } = request.params as { runId: string };
+      const visible = await deps.withRequestContext(
+        { userId: request.userId },
+        (db) => runVisibleToUser(db, runId),
+      );
+      if (!visible) {
+        return reply.code(404).send({ error: "run not found" });
+      }
+
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+      });
+      reply.raw.write(":\n\n");
+
+      const unsubscribe = streamBus.listen(runId, (event) => {
+        reply.raw.write(
+          `event: ${event.type}\ndata: ${JSON.stringify(event.payload)}\n\n`,
+        );
+      });
+      const onClose = () => {
+        unsubscribe();
+        request.raw.off("close", onClose);
+      };
+      request.raw.on("close", onClose);
     });
 
     api.get("/api/canvases/:canvasId/deltas", async (request, reply) => {

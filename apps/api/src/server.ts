@@ -12,6 +12,7 @@
 
 import cors from "@fastify/cors";
 
+import { createPgStreamBus } from "./db/pgStreamBus.js";
 import { buildApp } from "./app.js";
 import { withRequestContext } from "./db/index.js";
 
@@ -26,8 +27,12 @@ function required(name: string): string {
 const jwtSecret = new TextEncoder().encode(required("SUPABASE_JWT_SECRET"));
 const issuer = `${required("SUPABASE_URL").replace(/\/+$/, "")}/auth/v1`;
 
+const listenUrl =
+  process.env.CORESEARCH_APP_DATABASE_URL ?? process.env.DATABASE_URL;
+const streamBus = listenUrl ? createPgStreamBus(listenUrl) : undefined;
+
 const app = buildApp(
-  { auth: { secret: jwtSecret, issuer }, withRequestContext },
+  { auth: { secret: jwtSecret, issuer }, withRequestContext, streamBus },
   { logger: true },
 );
 

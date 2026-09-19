@@ -29,3 +29,6 @@ export {
   fixtureSessionPayload,
   entityPresentation,
 } from "./candidate.js";
+export { proposeCandidate, type ProposeCandidateInput } from "./proposeCandidate.js";
+export { persistSessionEntries, isUuid } from "./sessionEntries.js";
+export type { SqlQuery } from "./sql.js";

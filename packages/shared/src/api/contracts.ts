@@ -134,3 +134,28 @@ export interface AcceptCandidateResult {
   fromVersion: number;
   deltas: unknown[];
 }
+
+/** Response of `POST /api/projects/:projectId/threads`. */
+export interface CreatedThread {
+  threadId: string;
+}
+
+/** Response of `POST /api/threads/:threadId/runs`. */
+export interface CreatedRun {
+  runId: string;
+  threadId: string;
+  status: "queued";
+}
+
+/** One durable row from `GET /api/threads/:threadId/messages`. */
+export interface AgentMessageRow {
+  id: string;
+  parentId: string | null;
+  entryType: string;
+  payload: unknown;
+  createdAt: string;
+}
+
+export interface AgentMessageList {
+  messages: AgentMessageRow[];
+}

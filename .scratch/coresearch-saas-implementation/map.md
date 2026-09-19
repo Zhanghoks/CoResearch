@@ -27,7 +27,7 @@
      ↓
     06 Deterministic Candidate → Accept → Projection (V3A)
     ├── 07 Research-managed Node Ownership (V4)          ← 只需要 06，不需要 08
-    └── 08 Pi Agent → Candidate → 同一 Accept Path (V3B)
+    └── 08 Pi Agent → Candidate → 同一 Accept Path (V3B)   ← 已绿
          ├── 09 Proposal Track B (V5)          ← 暂不进入 frontier
          └── 10 Worker 韧性 (V6)                ← 暂不进入 frontier
 
@@ -42,7 +42,8 @@ Milestone 1 = 07 + 08 都绿
 - [04](issues/04-auth-project-primary-canvas.md) resolved：Supabase JWT 验签 + `POST/GET /api/projects` + `GET /api/canvases/:canvasId`（空画布）；Web 外壳照搬 Huabu `apps/web` 改装（router/guard/store/api client）。真实浏览器 magic-link 往返未验证（本会话无 Supabase 凭证）。
 - [05](issues/05-note-editing-realtime-catchup.md) resolved：note 的 create/move/edit/delete 走 `/execute` + advisory lock + `canvas_deltas`；catch-up 端点和 `nextSyncAction` 已测。双标签页 Realtime 代码已接，未在真实浏览器验证。
 - [06](issues/06-deterministic-candidate-accept.md) resolved：fixture `CandidatePart` → accept 单事务物化 entity+revision+crEntity+projection+delta；幂等与回滚已测。GET overlay 经 `canvas_projections`。
-- [07](issues/07-research-managed-node-ownership.md) resolved：`executeFromRequest` / `executeAsProjector` 双入口；owned MERGE → `invalid-scope`；`userNote` 可写；投影器刷新同一 nodeId、几何不动。Frontier 现在是 [08](issues/08-pi-agent-candidate.md)。
+- [07](issues/07-research-managed-node-ownership.md) resolved：`executeFromRequest` / `executeAsProjector` 双入口；owned MERGE → `invalid-scope`；`userNote` 可写；投影器刷新同一 nodeId、几何不动。
+- [08](issues/08-pi-agent-candidate.md) resolved：Pi fail-closed 工厂 + 自定义 ResourceLoader + threads/runs/SSE；`propose_candidates` 写 SessionEntry，accept 复用 06。真实 LLM 往返未测。09/10 仍不进 frontier。
 
 ## Not yet specified
 

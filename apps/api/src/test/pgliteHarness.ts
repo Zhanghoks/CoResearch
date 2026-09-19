@@ -44,6 +44,7 @@ export async function freshDb(): Promise<PGlite> {
   `);
   await db.exec(migration("00000000000001_init.sql"));
   await db.exec(migration("00000000000002_rls.sql"));
+  await db.exec(migration("00000000000003_agent_run_prompt.sql"));
   return db;
 }
 

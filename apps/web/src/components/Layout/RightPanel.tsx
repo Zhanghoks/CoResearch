@@ -1,8 +1,10 @@
 import clsx from 'clsx'
 import { Link2, Send, Sparkles } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
-import { createFixtureCandidate, listCandidates, type CandidatePart } from '../../api/candidates'
+import { createRun, createThread } from '../../api/agent'
+import { listCandidates, type CandidatePart } from '../../api/candidates'
+import { useAgentRunStream } from '../../hooks/useAgentRunStream'
 import { getAccentTokens, resolveAccent } from '../../lib/accent'
 import { NODE_VISUALS } from '../../lib/nodeVisuals'
 import type { CrEntityNode } from '../../data/seedGraph'
@@ -59,29 +61,70 @@ function ChatTab({
 }) {
   const [candidates, setCandidates] = useState<CandidatePart[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [threadId, setThreadId] = useState<string | null>(null)
+  const [runId, setRunId] = useState<string | null>(null)
+  const [prompt, setPrompt] = useState('')
+  const [streamText, setStreamText] = useState('')
+  const [sending, setSending] = useState(false)
+
+  const refreshCandidates = useCallback(async (pid: string) => {
+    const listed = await listCandidates(pid)
+    setCandidates(listed.candidates)
+  }, [])
 
   useEffect(() => {
     if (!projectId) return
     let cancelled = false
-    listCandidates(projectId)
-      .then(async (listed) => {
-        if (cancelled) return
-        if (listed.candidates.length > 0) {
-          setCandidates(listed.candidates)
-          return
-        }
-        const fixture = await createFixtureCandidate(projectId)
-        if (!cancelled) setCandidates([fixture])
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setLoadError(err instanceof Error ? err.message : String(err))
-        }
-      })
+    refreshCandidates(projectId).catch((err: unknown) => {
+      if (!cancelled) {
+        setLoadError(err instanceof Error ? err.message : String(err))
+      }
+    })
     return () => {
       cancelled = true
     }
-  }, [projectId])
+  }, [projectId, refreshCandidates])
+
+  const onStreamEvent = useCallback(
+    (type: string, payload: unknown) => {
+      if (type === 'message.delta') {
+        const rec = payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {}
+        const inner = rec.assistantMessageEvent
+        const delta =
+          inner && typeof inner === 'object' && 'delta' in inner
+            ? String((inner as { delta?: unknown }).delta ?? '')
+            : ''
+        if (delta) setStreamText((prev) => prev + delta)
+      }
+      if (type === 'message.completed' || type === 'tool.completed' || type === 'run.completed') {
+        if (projectId) void refreshCandidates(projectId)
+      }
+    },
+    [projectId, refreshCandidates],
+  )
+  useAgentRunStream(runId, onStreamEvent)
+
+  async function send() {
+    if (!projectId || !prompt.trim() || sending) return
+    setSending(true)
+    setLoadError(null)
+    setStreamText('')
+    try {
+      let tid = threadId
+      if (!tid) {
+        const created = await createThread(projectId)
+        tid = created.threadId
+        setThreadId(tid)
+      }
+      const run = await createRun(tid, prompt.trim())
+      setRunId(run.runId)
+      setPrompt('')
+    } catch (err: unknown) {
+      setLoadError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSending(false)
+    }
+  }
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -94,6 +137,9 @@ function ChatTab({
             ? `Selected "${node.data.title}". Ask me to expand, connect, or draft a hypothesis from this ${node.data.entityKind}.`
             : 'Select a node on the canvas to bring it into context, or ask a question about the research space.'}
         </div>
+        {streamText ? (
+          <p className="text-fg-muted mb-2 whitespace-pre-wrap">{streamText}</p>
+        ) : null}
         {loadError ? <p className="text-danger mb-2">{loadError}</p> : null}
         {candidates.map((candidate) => (
           <div key={candidate.candidateId} className="mb-2">
@@ -106,9 +152,22 @@ function ChatTab({
           <textarea
             rows={2}
             placeholder="Ask the agent…"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                void send()
+              }
+            }}
             className="text-fg-default placeholder:text-fg-subtle flex-1 resize-none bg-transparent px-1 text-[12.5px] outline-none"
           />
-          <button className="bg-info flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white">
+          <button
+            type="button"
+            disabled={sending || !prompt.trim()}
+            onClick={() => void send()}
+            className="bg-info flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white disabled:opacity-50"
+          >
             <Send size={13} />
           </button>
         </div>
