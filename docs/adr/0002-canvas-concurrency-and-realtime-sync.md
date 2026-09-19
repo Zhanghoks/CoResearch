@@ -6,4 +6,4 @@
 
 被拒绝的替代方案：Redis 分布式锁（Redlock 或单 Redis）。V1 明确不引入 Redis，等出现 Postgres 咨询锁确实不够用的负载（高吞吐 job queue、跨区域协调）再考虑。
 
-**实时同步**：Supabase Realtime 订阅 `canvas_deltas` 表按 `canvas_id` 过滤的 INSERT 事件，取代 Huabu 原版 `Map<canvasId, Set<Listener>>` + 自建 SSE。但 Realtime 只是通知快路径，不是权威的 replay log——客户端不能假设自己永远不会漏事件（连接抖动、重连期间的窗口）。因此必须同时提供 `GET /spaces/:canvasId/deltas?afterVersion=N` 作为 durable catch-up 源；客户端发现本地 `localVersion` 与收到的事件 `fromVersion` 之间有 gap 时，从这个端点补齐再按序 replay。`canvas_deltas` 表本身才是真正的持久来源，Realtime 只是它的一个订阅通道。
+**实时同步**：Supabase Realtime 订阅 `canvas_deltas` 表按 `canvas_id` 过滤的 INSERT 事件，取代 Huabu 原版 `Map<canvasId, Set<Listener>>` + 自建 SSE。但 Realtime 只是通知快路径，不是权威的 replay log——客户端不能假设自己永远不会漏事件（连接抖动、重连期间的窗口）。因此必须同时提供 `GET /api/canvases/:canvasId/deltas?afterVersion=N` 作为 durable catch-up 源；客户端发现本地 `localVersion` 与收到的事件 `fromVersion` 之间有 gap 时，从这个端点补齐再按序 replay。`canvas_deltas` 表本身才是真正的持久来源，Realtime 只是它的一个订阅通道。

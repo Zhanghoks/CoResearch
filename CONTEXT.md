@@ -24,8 +24,8 @@ _Avoid_: 把 Candidate 和 `confirmed:false` 的 Research Entity 混为一谈—
 `Proposal.kind` 标的是"这条 Proposal 修改的语义区域"（`clarification`/`problem`/`hypothesis`/`revision`/`pivot`，未来会扩展到 `direction`/`approach`/`research_question`），不是"只有这几种 entity kind 能被提修改"——任何 entity kind 一旦物化，后续修改都统一走 Proposal。
 
 **Canvas Projection**:
-把一个 Research Entity 投影到某个 Canvas 上的一个 node 的记录（`canvas_projections` 表：`entity_id` ↔ `canvas_id` ↔ `node_id`）。解耦"语义对象"与"画布上的一份呈现"：未来同一个 Direction 可以被投影到多个 Canvas 而不复制实体。`node_id` 一旦分配即稳定，是 `canvas_layout`（用户位置/尺寸）的外键——因此 Canvas Projection 记录本身不属于可丢弃重建的缓存；真正可重建的只有 `canvas_state`（物化的 nodes/edges 快照），重建时从 Canvas Projection + `canvas_layout` + Research Entity 重新拼出。
-一个 Research Entity 在获得第一条 Canvas Projection 之前，是否已经算"存在"、以什么形式呈现给用户（仅在 Conversation 里，还是已经是 `confirmed:false` 的实体但还没投影），因 entity kind 而未有定论，见 wayfinder 地图。
+把一个 Research Entity 投影到某个 Canvas 上的一个 node 的记录（`canvas_projections` 表：`entity_id` ↔ `canvas_id` ↔ `node_id`）。解耦"语义对象"与"画布上的一份呈现"：未来同一个 Direction 可以被投影到多个 Canvas 而不复制实体。`node_id` 一旦分配即稳定，是 `canvas_layout`（用户位置/尺寸）的外键——因此 Canvas Projection 记录本身不属于可丢弃重建的缓存。一个 Research Entity 在获得第一条 Canvas Projection 之前不算"存在"——它只是 Candidate，只存在于 Conversation；Entity、首条 revision、首条 Canvas Projection 在用户"接受"的瞬间同时创建（见 Candidate 词条、[ADR 0004](docs/adr/0004-candidate-vs-proposal-two-track-model.md)/[0005](docs/adr/0005-candidate-acceptance-transaction-shape.md)）。
+`canvas_state` 是否整体可丢弃重建、Canvas 原生节点（Frame/Note/PDF/Question/Web）的规范存储形态是 `canvas_state` 本身还是另一套规范化表，尚未定论，见 wayfinder 地图。
 
 **CoResearch API**:
 承载 Huabu 移植过来的 canvas-engine / projector / ownership guard / research-service 的受信任 Node 运行时。所有触碰 Research Domain 或 Canvas 领域表的写入必须经过这一层；浏览器不能绕过它直接写。

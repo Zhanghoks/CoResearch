@@ -10,7 +10,7 @@
 
 - 产品流程真值：[Research Flow](../../docs/design/research-flow.md)（11 步，Seed → Idea Versioning）；分步实现契约见 [Idea Formation](../../docs/design/idea-formation/README.md)；Idea 对象模型见 [idea-structure.md](../../docs/design/idea-structure.md)。
 - 领域术语与本效果新造概念的边界：[CONTEXT.md](../../CONTEXT.md)（Project / Research Domain / Canvas / Canvas Projection / CoResearch API / Agent Worker / RequestContext / CanvasCommandContext）。
-- 架构决策记录：[docs/adr/](../../docs/adr/)（0001 Supabase 混合架构、0002 Canvas 并发与实时同步、0003 Project:Canvas 基数）。
+- 架构决策记录：[docs/adr/](../../docs/adr/)（0001 Supabase 混合架构、0002 Canvas 并发与实时同步、0003 Project:Canvas 基数、0004 Candidate/Proposal 两轨、0005 候选接受事务形状、0006 pi-coding-agent SDK 采用、0007 Agent 工具集去掉 canvas_commands）。
 - 技术栈：后端 Supabase（Postgres + Auth + Storage + Realtime，只当托管基础设施）+ 自建 Node 服务（CoResearch API + Agent Worker，承载 Huabu 移植过来的 canvas-engine）。V1 不引入 Redis。
 - 源码出处：`Huabu-main/`（microsoft/Huabu，MIT）。直接复制的源码片段须保留版权与许可声明；只借架构决策的部分在文件头注明来源。
 - 每个 ticket 解决时默认调用 grilling + domain-modeling 两个技能（除非 ticket 类型是 research/task，见各自的 Type 行）。
@@ -46,10 +46,10 @@
 - [Research Entity 生命周期与 Agent-proposed/user-confirmed 状态模型](issues/11-research-entity-lifecycle-and-candidate-model.md)：两轨模型（Candidate 物化 / Proposal 修订）按操作语义区分，不按 entity kind 硬编码；`saved ≠ confirmed`；Proposal 从不产生 Canvas node，走 Idea Meta Space 审阅。详见 [ADR 0004](../../docs/adr/0004-candidate-vs-proposal-two-track-model.md)。
 - [候选接受流程与 Canvas Projection 生命周期](issues/12-candidate-acceptance-flow-and-canvas-projection-lifecycle.md)：`candidateId` 服务端签发、持久化在 `agent_messages`；accept 单事务+`UNIQUE(project_id, source_candidate_id)` 幂等；`canvas_state` = 原生拓扑 + Research-managed 投影；删节点≠删实体。详见 [ADR 0005](../../docs/adr/0005-candidate-acceptance-transaction-shape.md)。
 - [Agent Worker 运行时迁移到 pi-coding-agent SDK](issues/16-agent-extension-architecture.md)：采用官方 `@earendil-works/pi-coding-agent`（核查通过，与 Huabu 已依赖的 `pi-agent-core`/`pi-ai` 同源同版本），替代 Agenetes 自研编排；自定义 `ResourceLoader` 关掉默认文件系统发现，必须显式传 `tools:[...]` 白名单（SDK 默认内置 `read`/`bash`/`edit`/`write`，漏传即安全漏洞），Postgres 为耐久真值，事件经 adapter 转译。详见 [ADR 0006](../../docs/adr/0006-agent-worker-pi-coding-agent-sdk.md)。
+- [Agent 工具集与写入权限边界](issues/14-agent-tool-write-permission-boundary.md)：最终 6 工具（`search_papers`/`read_paper`/`inspect_research_state`/`propose_candidates`/`propose_revision`/`ask_user`），去掉 `canvas_commands`（[ADR 0007](../../docs/adr/0007-agent-tool-set-drops-canvas-commands.md)：两轨模型下 Agent 没有合法场景直接发画布命令）；`accept_*`/`archive_entity`/画布几何命令永远不注册成 Agent Tool；越权检查统一收口到服务层，Agent Worker 和 HTTP 路径复用同一套。
 
 ## Not yet specified
 
-- **Agent Worker 调度机制**：怎么发起/取消/超时一次 run，要不要队列（Postgres 表 + `LISTEN/NOTIFY`，还是别的）。依赖 ticket 11/14 的结论先落地，现在还不够 sharp。
 - **阶段二 spec ticket 的具体切分**：目前只知道大方向是"DB schema / API 契约 / 引擎移植边界"三类，具体拆成几份文档、边界怎么画，要等阶段一（本地图）的 ticket 都毕业了才看得清。
 
 ## Out of scope
