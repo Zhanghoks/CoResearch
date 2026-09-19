@@ -23,9 +23,12 @@ _Avoid_: 把 Candidate 和 `confirmed:false` 的 Research Entity 混为一谈—
 对一个已存在的 Research Entity 提出的修改（Track B）。持久化对象，定义见 `docs/design/idea-structure.md` §3.1：带 `baseStateRevision`（防止基于旧版本改写）、`changes[]`（显式 diff）、`status: pending|accepted|rejected|superseded`。Proposal 从不产生 Canvas node，通过 Idea Meta Space 呈现给用户审阅；接受后应用 diff、目标实体 revision 递增。回答的问题是"这个已存在的对象要不要改"。
 `Proposal.kind` 标的是"这条 Proposal 修改的语义区域"（`clarification`/`problem`/`hypothesis`/`revision`/`pivot`，未来会扩展到 `direction`/`approach`/`research_question`），不是"只有这几种 entity kind 能被提修改"——任何 entity kind 一旦物化，后续修改都统一走 Proposal。
 
+**Canvas Node**:
+`canvas_nodes` 表里的一行——覆盖所有节点类型，原生（`note`/`frame`/`pdf`/`question`/`web`）和 Research-managed（`crEntity`）共用同一张表、同一套身份与拓扑字段（`parent_node_id` 自引用，见 `SET_NODE_PARENT`）。这是移植自 Huabu 的共享 canvas-engine（`CREATE_NODES`/`SET_NODE_PARENT`/`normalizeTreeOrder` 等）对节点类型无感这条约束逼出来的：分两张表会让类型无关的执行器需要知道"这条命令该往哪张表插"。几何（位置/尺寸/pinned/collapsed）单独在 `canvas_layout` 表（身份/拓扑与几何是两个关注点，分开更干净，不是为了"缓存重建时存活"）。原生节点的内容（Note 正文等）存在 `native_data` 列；`crEntity` 节点的 `native_data` 最多装画布层批注，语义内容永远来自它绑定的 Research Entity，不允许在这里出现第二份真值。
+
 **Canvas Projection**:
-把一个 Research Entity 投影到某个 Canvas 上的一个 node 的记录（`canvas_projections` 表：`entity_id` ↔ `canvas_id` ↔ `node_id`）。解耦"语义对象"与"画布上的一份呈现"：未来同一个 Direction 可以被投影到多个 Canvas 而不复制实体。`node_id` 一旦分配即稳定，是 `canvas_layout`（用户位置/尺寸）的外键——因此 Canvas Projection 记录本身不属于可丢弃重建的缓存。一个 Research Entity 在获得第一条 Canvas Projection 之前不算"存在"——它只是 Candidate，只存在于 Conversation；Entity、首条 revision、首条 Canvas Projection 在用户"接受"的瞬间同时创建（见 Candidate 词条、[ADR 0004](docs/adr/0004-candidate-vs-proposal-two-track-model.md)/[0005](docs/adr/0005-candidate-acceptance-transaction-shape.md)）。
-`canvas_state` 是否整体可丢弃重建、Canvas 原生节点（Frame/Note/PDF/Question/Web）的规范存储形态是 `canvas_state` 本身还是另一套规范化表，尚未定论，见 wayfinder 地图。
+把一个 Research Entity 绑定到某个 `canvas_nodes` 行的 binding（`canvas_projections` 表：`node_id` 主键 ↔ `canvas_id` ↔ `entity_id`），不是一套独立于 `canvas_nodes` 的第二套节点清单——只有 `node_type = 'crEntity'` 的行有对应记录。解耦"语义对象"与"画布上的一份呈现"：未来同一个 Direction 可以被投影到多个 Canvas 而不复制实体。一个 Research Entity 在获得第一条 Canvas Projection 之前不算"存在"——它只是 Candidate，只存在于 Conversation；Entity、首条 revision、首条 Canvas Node（连带 Canvas Projection）在用户"接受"的瞬间同时创建（见 Candidate 词条、[ADR 0004](docs/adr/0004-candidate-vs-proposal-two-track-model.md)/[0005](docs/adr/0005-candidate-acceptance-transaction-shape.md)/[0008](docs/adr/0008-canvas-canonical-storage-unified-nodes.md)）。
+`canvas_nodes` 本身就是权威存储，不是可丢弃重建的缓存——"`canvas_state`"这个整体快照的概念已经被 `canvas_nodes`/`canvas_edges`/`canvas_projections`/`canvas_deltas` 这套规范化表取代（[ADR 0008](docs/adr/0008-canvas-canonical-storage-unified-nodes.md)）。代表研究关系的边（两个 `crEntity` 节点之间）不持久化存储，是投影器渲染时从 `research_relations` × `canvas_projections` 计算出的虚拟边；`canvas_edges` 表只存不对应任何 `research_relations` 的纯画布连线。
 
 **CoResearch API**:
 承载 Huabu 移植过来的 canvas-engine / projector / ownership guard / research-service 的受信任 Node 运行时。所有触碰 Research Domain 或 Canvas 领域表的写入必须经过这一层；浏览器不能绕过它直接写。
