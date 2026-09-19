@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { applyDeltas, invertDelta, type Delta } from "./delta.js";
-import { diffCanvasState } from "./diff.js";
+import { canonicalizeDeltas, diffCanvasState } from "./diff.js";
 import type { CanvasEdge, CanvasNode } from "./interfaces.js";
 
 function note(
@@ -90,5 +90,20 @@ describe("diffCanvasState — runtime UI fields", () => {
     const deltas = diffCanvasState(prev, next);
     assert.equal(deltas.length, 1);
     assert.equal(deltas[0].type, "REPLACE_NODE");
+  });
+});
+
+describe("canonicalizeDeltas", () => {
+  it("strips selected/measured from nodes before they hit the log", () => {
+    const [delta] = canonicalizeDeltas([
+      {
+        type: "INSERT_NODE",
+        node: note("a", { selected: true, measured: { width: 1, height: 2 } }),
+      },
+    ]);
+    assert.equal(delta.type, "INSERT_NODE");
+    if (delta.type !== "INSERT_NODE") return;
+    assert.equal("selected" in delta.node, false);
+    assert.equal("measured" in delta.node, false);
   });
 });

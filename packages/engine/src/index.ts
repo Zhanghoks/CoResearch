@@ -21,6 +21,7 @@ export type {
 } from "./interfaces.js";
 export { type Delta, applyDeltas, invertDelta } from "./delta.js";
 export {
+  canonicalizeDeltas,
   diffCanvasState,
   stripTransientNodeFields,
   stripTransientEdgeFields,

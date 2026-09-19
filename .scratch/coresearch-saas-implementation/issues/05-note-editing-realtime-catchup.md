@@ -23,3 +23,5 @@
 **没做到的**：和 04 号一样，本会话没有 `.env` / 浏览器登录，所以双标签页 Realtime 和「刷新后节点还在」没有在真实浏览器里点过。PGlite 覆盖了 execute 四条命令的持久化、no-op 不 bump、跨租户 404、deltas catch-up、advisory lock。
 
 SET_NODE_PARENT 在引擎和 `/execute` 里能跑，UI 这张切片只放自由 note，没有拖进 frame 的手势。
+
+**Review 修正**：`CREATE_NODES` 会给 ui 源打上 `selected: true`，原先原样写进 `canvas_deltas`，另一边 Realtime apply 会抢选中/冲掉本地 `measured`。现在 `canonicalizeDeltas` 在入日志前剥掉 `TRANSIENT_NODE_FIELDS`；前端 apply 时保留活着的 RF transient。空 diff 不再 bump 版本。`run()` 失败会显示错误而不是吞掉。

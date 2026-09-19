@@ -5,6 +5,7 @@
 // A fully rejected batch is a no-op and does not bump version.
 
 import {
+  canonicalizeDeltas,
   diffCanvasState,
   executeCanvasCommands,
   preAssignIds,
@@ -51,13 +52,27 @@ export async function executeOnCanvas(
       };
     }
 
-    const deltas = diffCanvasState(
-      { nodes: graph.nodes, edges: graph.edges },
-      {
-        nodes: output.writeResult.nodes,
-        edges: output.writeResult.edges,
-      },
+    const deltas = canonicalizeDeltas(
+      diffCanvasState(
+        { nodes: graph.nodes, edges: graph.edges },
+        {
+          nodes: output.writeResult.nodes,
+          edges: output.writeResult.edges,
+        },
+      ),
     );
+    if (deltas.length === 0) {
+      return {
+        version: graph.version,
+        fromVersion: graph.version,
+        commandResults: output.commandResults.map((r) => ({
+          type: r.command.type,
+          applied: r.applied,
+          reason: r.reason,
+        })),
+        deltas: [],
+      };
+    }
     const toVersion = graph.version + 1;
     await persistDeltas(db, canvasId, graph.version, toVersion, deltas);
 

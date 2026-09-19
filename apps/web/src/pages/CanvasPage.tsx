@@ -57,9 +57,24 @@ export default function CanvasPage() {
   const right = useResizableWidth({ defaultWidth: 380, min: 280, max: 520, anchor: 'right' })
 
   const applyRemoteDeltas = useCallback((deltas: Delta[], toVersion: number) => {
-    setNodes((current) => applyDeltas({ nodes: current, edges: [] }, deltas).nodes as CanvasNode[])
+    setNodes((current) => {
+      const next = applyDeltas({ nodes: current, edges: [] }, deltas)
+      const live = new Map(current.map((n) => [n.id, n]))
+      return next.nodes.map((n) => {
+        const prev = live.get(n.id)
+        if (!prev) return n as CanvasNode
+        return {
+          ...n,
+          selected: prev.selected,
+          dragging: prev.dragging,
+          measured: prev.measured,
+          resizing: prev.resizing,
+        } as CanvasNode
+      })
+    })
+    setEdges((current) => applyDeltas({ nodes: [], edges: current }, deltas).edges as Edge[])
     versionRef.current = toVersion
-  }, [setNodes])
+  }, [setEdges, setNodes])
 
   const catchUp = useCallback(
     async (id: string) => {
@@ -147,11 +162,15 @@ export default function CanvasPage() {
 
   async function run(commands: Parameters<typeof executeCanvas>[1]) {
     if (!canvasId) return
-    const result = await executeCanvas(canvasId, commands)
-    if (result.deltas.length > 0) {
-      applyRemoteDeltas(asDeltas(result.deltas), result.version)
-    } else {
-      versionRef.current = result.version
+    try {
+      const result = await executeCanvas(canvasId, commands)
+      if (result.deltas.length > 0) {
+        applyRemoteDeltas(asDeltas(result.deltas), result.version)
+      } else {
+        versionRef.current = result.version
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
     }
   }
 

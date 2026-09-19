@@ -36,6 +36,32 @@ export function stripTransientEdgeFields<T extends object>(edge: T): T {
   return out as T;
 }
 
+/** Drop renderer bookkeeping from a delta list before it hits the log. */
+export function canonicalizeDeltas(deltas: readonly Delta[]): Delta[] {
+  return deltas.map((delta) => {
+    switch (delta.type) {
+      case "INSERT_NODE":
+      case "DELETE_NODE":
+        return { ...delta, node: stripTransientNodeFields(delta.node) };
+      case "REPLACE_NODE":
+        return {
+          ...delta,
+          prev: stripTransientNodeFields(delta.prev),
+          next: stripTransientNodeFields(delta.next),
+        };
+      case "INSERT_EDGE":
+      case "DELETE_EDGE":
+        return { ...delta, edge: stripTransientEdgeFields(delta.edge) };
+      case "REPLACE_EDGE":
+        return {
+          ...delta,
+          prev: stripTransientEdgeFields(delta.prev),
+          next: stripTransientEdgeFields(delta.next),
+        };
+    }
+  });
+}
+
 /**
  * Compute the coarse delta list that transforms `prev` into `next`.
  * Output ordering: deletes first, then inserts, then replaces.

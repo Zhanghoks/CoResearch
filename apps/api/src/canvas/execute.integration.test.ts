@@ -91,6 +91,11 @@ describe("POST /api/canvases/:id/execute", () => {
       (d: { type: string }) => d.type === "INSERT_NODE",
     )?.node.id as string;
     assert.match(nodeId, /^[0-9a-f-]{36}$/i);
+    const inserted = createdBody.deltas.find(
+      (d: { type: string }) => d.type === "INSERT_NODE",
+    ) as { node: Record<string, unknown> };
+    assert.equal("selected" in inserted.node, false);
+    assert.equal("dragging" in inserted.node, false);
 
     const moved = await app.inject({
       method: "POST",
