@@ -3,6 +3,7 @@
 .remember/
 Huabu-main.zip
 node_modules/
+.pnpm-store/
 dist/
 .env
 .env.local
