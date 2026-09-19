@@ -164,10 +164,29 @@ export async function persistDeltas(
     }
   }
 
-  await db.query(
-    "UPDATE canvases SET version = $2 WHERE id = $1::uuid AND version = $3",
+  // Compare-and-swap on the version we read, and CHECK that it matched.
+  // `RETURNING` + `rows.length` rather than a rowcount because the two
+  // drivers disagree: node-postgres reports `rowCount`, PGlite reports
+  // `affectedRows`, and reading the wrong one yields `undefined` — which
+  // is exactly how this check would silently pass while never firing.
+  //
+  // Throwing rolls back the whole transaction (we are inside
+  // withRequestContext), which is the point: the node writes above and
+  // the delta row below must not survive a version they were not
+  // computed against, or the log would permanently describe a canvas
+  // state that never existed and every catch-up would replay it.
+  const swapped = await db.query<{ id: string }>(
+    `UPDATE canvases SET version = $2
+      WHERE id = $1::uuid AND version = $3
+      RETURNING id`,
     [canvasId, toVersion, fromVersion],
   );
+  if (swapped.rows.length === 0) {
+    throw new Error(
+      `canvas ${canvasId}: version moved from ${fromVersion} while the batch was being applied`,
+    );
+  }
+
   await db.query(
     `INSERT INTO canvas_deltas (canvas_id, from_version, to_version, deltas)
      VALUES ($1::uuid, $2, $3, $4::jsonb)`,
