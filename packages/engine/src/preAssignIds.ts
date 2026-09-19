@@ -7,7 +7,7 @@
 // docs/spec/01-database-schema.md §3). UI/system batches may pass an id
 // when a later command in the same batch needs to refer to the new node.
 
-import { createId } from "@coresearch/shared";
+import { createUuid } from "@coresearch/shared";
 
 import type {
   CanvasCommand,
@@ -27,10 +27,10 @@ export function preAssignIds(
     }
     const nodes = cmd.nodes.map((n) => {
       if (source === "agent") {
-        return { ...n, id: createId("node") as CanvasNodeId };
+        return { ...n, id: createUuid() as CanvasNodeId };
       }
       if (n.id) return n;
-      return { ...n, id: createId("node") as CanvasNodeId };
+      return { ...n, id: createUuid() as CanvasNodeId };
     });
     out.push({ ...cmd, nodes });
   }

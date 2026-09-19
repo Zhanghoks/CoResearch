@@ -2,10 +2,10 @@
 // Licensed under the MIT license.
 //
 // Ported from Huabu-main/packages/shared/src/canvas-engine/executor.ts.
-// Ticket 02 keeps the batch-dispatch + end-of-batch `normalizeTreeOrder`
-// funnel and the all-rejected-is-a-no-op version semantics. Structured
-// frame relayout / fitFrames (ADR 0010) and note provenance are skipped
-// until the tickets that add SET_FRAME_LAYOUT / MERGE_NODE_DATA.
+// Ticket 02: batch-dispatch + end-of-batch `normalizeTreeOrder` and
+// all-rejected-is-a-no-op. Ticket 05 adds MERGE/GEOMETRY/PARENT handlers
+// through the registry. Structured frame relayout still waits for
+// SET_FRAME_LAYOUT.
 
 import { HANDLERS, COMMAND_META } from "./commands/index.js";
 import { normalizeTreeOrder, type NestableNode } from "./container/index.js";

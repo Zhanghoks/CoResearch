@@ -1,21 +1,11 @@
 // Initial canvas load (docs/spec/02-api-contract.md §3).
-//
-// Ticket 04 only has to load an EMPTY canvas — nothing creates canvas
-// nodes until ticket 05 (note editing) and ticket 06 (candidate
-// acceptance / projections). So this reads the canvas identity and
-// returns empty collections rather than pretending to assemble
-// canvas_nodes × canvas_layout × canvas_projections × research_entities
-// and the virtual relation edges; that assembly lands with the slice that
-// first puts a node on the board.
-//
-// Returns null when the canvas is not visible to the caller. RLS already
-// filters the row out, so "someone else's canvas" and "no such canvas"
-// are indistinguishable here by construction — the route turns both into
-// 404 so we never confirm that an id exists.
+// Assembles canvas_nodes × canvas_layout × canvas_edges. Projections and
+// virtual relation edges land with ticket 06 (first crEntity on the board).
 
 import type { CanvasSnapshot } from "@coresearch/shared";
 
 import type { RequestDb } from "../db/index.js";
+import { loadCanvasGraph, toWireNode } from "./state.js";
 
 export type { CanvasSnapshot };
 
@@ -23,31 +13,33 @@ export async function readCanvas(
   db: RequestDb,
   canvasId: string,
 ): Promise<CanvasSnapshot | null> {
-  const result = await db.query<{
+  const identity = await db.query<{
     id: string;
     project_id: string;
     project_title: string;
-    version: string | number;
   }>(
-    `SELECT c.id, c.project_id, c.version, p.title AS project_title
+    `SELECT c.id, c.project_id, p.title AS project_title
        FROM canvases c
        JOIN projects p ON p.id = c.project_id
       WHERE c.id = $1::uuid`,
     [canvasId],
   );
-
-  const row = result.rows[0];
+  const row = identity.rows[0];
   if (!row) return null;
+
+  const graph = await loadCanvasGraph(db, canvasId);
+  if (!graph) return null;
 
   return {
     canvasId: row.id,
     projectId: row.project_id,
     projectTitle: row.project_title,
-    // bigint arrives as a string over the wire; the canvas version is a
-    // counter the client compares against delta versions, so it must be
-    // a number on the JSON boundary.
-    version: Number(row.version),
-    nodes: [],
-    edges: [],
+    version: graph.version,
+    nodes: graph.nodes.map(toWireNode),
+    edges: graph.edges.map((e) => ({
+      id: e.id,
+      source: e.source,
+      target: e.target,
+    })),
   };
 }

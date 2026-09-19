@@ -11,7 +11,11 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { verifyAccessToken, type AuthConfig } from "./auth/verifyAccessToken.js";
 import { createProject } from "./projects/createProject.js";
 import { listProjects } from "./projects/listProjects.js";
+import { executeOnCanvas } from "./canvas/executeOnCanvas.js";
 import { readCanvas } from "./canvas/readCanvas.js";
+import { readDeltas } from "./canvas/readDeltas.js";
+
+import type { CanvasCommand } from "@coresearch/shared";
 
 import type { RequestContext, RequestDb } from "./db/index.js";
 
@@ -88,6 +92,41 @@ export function buildApp(deps: AppDeps, opts: { logger?: boolean } = {}): Fastif
         return reply.code(404).send({ error: "canvas not found" });
       }
       return canvas;
+    });
+
+    api.post("/api/canvases/:canvasId/execute", async (request, reply) => {
+      const { canvasId } = request.params as { canvasId: string };
+      const body = (request.body ?? {}) as { commands?: unknown };
+      if (!Array.isArray(body.commands)) {
+        return reply.code(400).send({ error: "commands array is required" });
+      }
+      const result = await deps.withRequestContext(
+        { userId: request.userId },
+        (db) =>
+          executeOnCanvas(db, canvasId, body.commands as CanvasCommand[]),
+      );
+      if (!result) {
+        return reply.code(404).send({ error: "canvas not found" });
+      }
+      return result;
+    });
+
+    api.get("/api/canvases/:canvasId/deltas", async (request, reply) => {
+      const { canvasId } = request.params as { canvasId: string };
+      const after = Number(
+        (request.query as { afterVersion?: string }).afterVersion ?? "0",
+      );
+      if (!Number.isFinite(after) || after < 0) {
+        return reply.code(400).send({ error: "afterVersion must be >= 0" });
+      }
+      const log = await deps.withRequestContext(
+        { userId: request.userId },
+        (db) => readDeltas(db, canvasId, after),
+      );
+      if (!log) {
+        return reply.code(404).send({ error: "canvas not found" });
+      }
+      return log;
     });
   });
 

@@ -20,6 +20,10 @@ export function addPos(a: XYPosition, b: XYPosition): XYPosition {
   return { x: a.x + b.x, y: a.y + b.y };
 }
 
+export function subPos(a: XYPosition, b: XYPosition): XYPosition {
+  return { x: a.x - b.x, y: a.y - b.y };
+}
+
 export function indexById(nodes: NestableNode[]): Map<string, NestableNode> {
   return new Map(nodes.map((n) => [n.id, n] as const));
 }

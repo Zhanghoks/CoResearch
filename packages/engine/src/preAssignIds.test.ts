@@ -25,7 +25,10 @@ describe("preAssignIds", () => {
     assert.equal(cmd.type, "CREATE_NODES");
     if (cmd.type !== "CREATE_NODES") return;
     assert.equal(cmd.nodes[0]?.id === supplied, false);
-    assert.match(cmd.nodes[0]?.id ?? "", /^node-/);
+    assert.match(
+      cmd.nodes[0]?.id ?? "",
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
   });
 
   it("fills in missing ids for ui batches and keeps caller ids", () => {
@@ -45,6 +48,9 @@ describe("preAssignIds", () => {
     assert.equal(cmd.type, "CREATE_NODES");
     if (cmd.type !== "CREATE_NODES") return;
     assert.equal(cmd.nodes[0]?.id, kept);
-    assert.match(cmd.nodes[1]?.id ?? "", /^node-/);
+    assert.match(
+      cmd.nodes[1]?.id ?? "",
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+    );
   });
 });

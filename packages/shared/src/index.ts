@@ -3,6 +3,7 @@ export * from "./canvas/execution.js";
 export * from "./canvas/command.js";
 export * from "./canvas/node.js";
 export * from "./canvas/layout.js";
+export * from "./canvas/sync.js";
 export * from "./utils/id.js";
 
 // edge.ts / color.ts are not needed yet — CREATE_NODES/DELETE_NODES (ticket

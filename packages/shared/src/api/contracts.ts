@@ -45,6 +45,54 @@ export interface CanvasSnapshot {
    * `never[]`: the wire shape is settled by the slice that first emits
    * one, and `never[]` would read as "can never hold anything".
    */
-  nodes: unknown[];
-  edges: unknown[];
+  nodes: WireCanvasNode[];
+  edges: WireCanvasEdge[];
+}
+
+/** xyflow-compatible node as stored/returned by the API. */
+export interface WireCanvasNode {
+  id: string;
+  type: string;
+  position: { x: number; y: number };
+  parentId?: string | null;
+  data: Record<string, unknown>;
+  width?: number | null;
+  height?: number | null;
+  zIndex?: number | null;
+}
+
+export interface WireCanvasEdge {
+  id: string;
+  source: string;
+  target: string;
+  edgeType?: string;
+}
+
+/** Body of `POST /api/canvases/:canvasId/execute`. */
+export interface ExecuteCanvasBody {
+  commands: import("../canvas/command.js").CanvasCommand[];
+}
+
+/** Response of `POST /api/canvases/:canvasId/execute`. */
+export interface ExecuteCanvasResult {
+  version: number;
+  fromVersion: number;
+  commandResults: Array<{
+    type: string;
+    applied: boolean;
+    reason?: string;
+  }>;
+  /** Coarse deltas of this batch; empty when the batch was a no-op. */
+  deltas: unknown[];
+}
+
+/** One row from `GET /api/canvases/:canvasId/deltas?afterVersion=N`. */
+export interface CanvasDeltaLogEntry {
+  fromVersion: number;
+  toVersion: number;
+  deltas: unknown[];
+}
+
+export interface CanvasDeltaLog {
+  entries: CanvasDeltaLogEntry[];
 }

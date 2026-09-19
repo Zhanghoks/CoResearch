@@ -1,46 +1,75 @@
-// Route `/canvas/:canvasId` — the real, API-backed canvas.
+// Route `/canvas/:canvasId` — API-backed canvas with note editing.
 //
-// Structure follows Huabu's CanvasPage: the canvas id comes from the URL,
-// not from props, so a deep link or a refresh loads the same board. The
-// shell around it (Header / LeftPanel / Canvas / RightPanel) is
-// CoResearch's own prototype layout, kept as-is.
-//
-// Ticket 04 only has to prove the EMPTY board loads and renders: the
-// snapshot's nodes/edges stay empty until note editing (ticket 05) and
-// candidate acceptance (ticket 06) put something on it. The prototype's
-// editing handlers (connect, drag-to-persist) are deliberately not wired
-// — there is no execute endpoint yet, so accepting edits here would
-// silently drop them.
+// Ticket 05: create/move/edit/delete notes persist through POST /execute,
+// Realtime INSERT on canvas_deltas is the fast path, and a version gap
+// triggers GET .../deltas catch-up (ADR 0002).
 
-import { useEdgesState, useNodesState } from '@xyflow/react'
-import { useEffect, useState } from 'react'
+import { applyDeltas, type Delta } from '@coresearch/engine'
+import { nextSyncAction, type WireCanvasNode } from '@coresearch/shared'
+import { useEdgesState, useNodesState, type Edge } from '@xyflow/react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
-import type { Edge } from '@xyflow/react'
-
-import { getCanvas, type CanvasSnapshot } from '../api/canvas'
+import { executeCanvas, getCanvas, getCanvasDeltas, type CanvasSnapshot } from '../api/canvas'
 import { ApiError } from '../api/_client'
 import { Canvas, type CanvasNode } from '../components/Canvas/Canvas'
 import { Header } from '../components/Layout/Header'
 import { LeftPanel } from '../components/Layout/LeftPanel'
 import { ResizeHandle } from '../components/Layout/ResizeHandle'
 import { RightPanel } from '../components/Layout/RightPanel'
+import { supabase } from '../lib/supabase'
 import { useResizableWidth } from '../lib/useResizableWidth'
 import { AppLoadingScreen } from './AppLoadingScreen'
 
 import type { CrEntityNode } from '../data/seedGraph'
+
+function toFlow(nodes: WireCanvasNode[]): CanvasNode[] {
+  return nodes.map((n) => ({
+    id: n.id,
+    type: n.type,
+    position: n.position,
+    parentId: n.parentId ?? undefined,
+    data: n.data,
+    style: {
+      width: n.width ?? 240,
+      height: n.height ?? 140,
+    },
+    zIndex: n.zIndex ?? undefined,
+  })) as CanvasNode[]
+}
+
+function asDeltas(value: unknown): Delta[] {
+  return Array.isArray(value) ? (value as Delta[]) : []
+}
 
 export default function CanvasPage() {
   const { canvasId } = useParams<{ canvasId: string }>()
   const navigate = useNavigate()
   const [snapshot, setSnapshot] = useState<CanvasSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [nodes, , onNodesChange] = useNodesState<CanvasNode>([])
-  const [edges, , onEdgesChange] = useEdgesState<Edge>([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
+  const [editing, setEditing] = useState<{ id: string; content: string } | null>(null)
+  const versionRef = useRef(0)
   const [isLeftCollapsed, setLeftCollapsed] = useState(false)
   const [isRightCollapsed, setRightCollapsed] = useState(false)
   const left = useResizableWidth({ defaultWidth: 260, min: 200, max: 420 })
   const right = useResizableWidth({ defaultWidth: 380, min: 280, max: 520, anchor: 'right' })
+
+  const applyRemoteDeltas = useCallback((deltas: Delta[], toVersion: number) => {
+    setNodes((current) => applyDeltas({ nodes: current, edges: [] }, deltas).nodes as CanvasNode[])
+    versionRef.current = toVersion
+  }, [setNodes])
+
+  const catchUp = useCallback(
+    async (id: string) => {
+      const log = await getCanvasDeltas(id, versionRef.current)
+      for (const entry of log.entries) {
+        applyRemoteDeltas(asDeltas(entry.deltas), entry.toVersion)
+      }
+    },
+    [applyRemoteDeltas],
+  )
 
   useEffect(() => {
     if (!canvasId) {
@@ -52,7 +81,17 @@ export default function CanvasPage() {
     setError(null)
     getCanvas(canvasId)
       .then((loaded) => {
-        if (!cancelled) setSnapshot(loaded)
+        if (cancelled) return
+        setSnapshot(loaded)
+        setNodes(toFlow(loaded.nodes))
+        setEdges(
+          loaded.edges.map((e) => ({
+            id: e.id,
+            source: e.source,
+            target: e.target,
+          })),
+        )
+        versionRef.current = loaded.version
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -67,7 +106,54 @@ export default function CanvasPage() {
     return () => {
       cancelled = true
     }
-  }, [canvasId])
+  }, [canvasId, setEdges, setNodes])
+
+  useEffect(() => {
+    if (!canvasId) return
+    const channel = supabase
+      .channel(`canvas-deltas:${canvasId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'canvas_deltas',
+          filter: `canvas_id=eq.${canvasId}`,
+        },
+        (payload) => {
+          const row = payload.new as {
+            from_version: number
+            to_version: number
+            deltas: unknown
+          }
+          const action = nextSyncAction(
+            versionRef.current,
+            Number(row.from_version),
+            Number(row.to_version),
+          )
+          if (action === 'ignore') return
+          if (action === 'apply') {
+            applyRemoteDeltas(asDeltas(row.deltas), Number(row.to_version))
+            return
+          }
+          void catchUp(canvasId)
+        },
+      )
+      .subscribe()
+    return () => {
+      void supabase.removeChannel(channel)
+    }
+  }, [applyRemoteDeltas, canvasId, catchUp])
+
+  async function run(commands: Parameters<typeof executeCanvas>[1]) {
+    if (!canvasId) return
+    const result = await executeCanvas(canvasId, commands)
+    if (result.deltas.length > 0) {
+      applyRemoteDeltas(asDeltas(result.deltas), result.version)
+    } else {
+      versionRef.current = result.version
+    }
+  }
 
   if (error) {
     return (
@@ -85,7 +171,6 @@ export default function CanvasPage() {
 
   if (!snapshot) return <AppLoadingScreen message="加载画布…" />
 
-  // Empty until ticket 05/06; the panel only renders research entities.
   const crEntityNodes = nodes.filter((n): n is CrEntityNode => n.type === 'crEntity')
 
   return (
@@ -113,7 +198,43 @@ export default function CanvasPage() {
             onEdgesChange={onEdgesChange}
             onConnect={() => {}}
             onNodeClick={() => {}}
-            onNodeDoubleClick={() => {}}
+            onNodeDoubleClick={(_e, node) => {
+              if (node.type !== 'note') return
+              const content =
+                typeof node.data.content === 'string' ? node.data.content : ''
+              setEditing({ id: node.id, content })
+            }}
+            onPaneDoubleClick={(position) => {
+              void run([
+                {
+                  type: 'CREATE_NODES',
+                  nodes: [
+                    {
+                      nodeType: 'note',
+                      position,
+                      data: { content: '' },
+                      size: { width: 240, height: 140 },
+                    },
+                  ],
+                },
+              ])
+            }}
+            onNodeDragStop={(_e, node) => {
+              void run([
+                {
+                  type: 'SET_NODE_GEOMETRY',
+                  items: [{ nodeId: node.id, position: node.position }],
+                },
+              ])
+            }}
+            onNodesDelete={(deleted) => {
+              void run([
+                {
+                  type: 'DELETE_NODES',
+                  nodeIds: deleted.map((n) => n.id),
+                },
+              ])
+            }}
           />
         </div>
         {!isRightCollapsed && (
@@ -123,6 +244,39 @@ export default function CanvasPage() {
           </div>
         )}
       </div>
+      {editing && (
+        <div className="border-edge-default bg-bg-surface absolute right-8 bottom-8 left-8 z-20 rounded-md border p-3 shadow-md">
+          <textarea
+            className="text-fg-default h-24 w-full resize-none text-sm outline-none"
+            value={editing.content}
+            onChange={(e) => setEditing({ ...editing, content: e.target.value })}
+            autoFocus
+          />
+          <div className="mt-2 flex justify-end gap-2">
+            <button
+              className="text-fg-muted text-sm"
+              onClick={() => setEditing(null)}
+            >
+              取消
+            </button>
+            <button
+              className="text-fg-default text-sm underline"
+              onClick={() => {
+                const { id, content } = editing
+                setEditing(null)
+                void run([
+                  {
+                    type: 'MERGE_NODE_DATA',
+                    patches: [{ nodeId: id, patch: { content } }],
+                  },
+                ])
+              }}
+            >
+              保存
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

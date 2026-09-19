@@ -8,6 +8,9 @@
 
 import createNodes from "./createNodes.js";
 import deleteNodes from "./deleteNodes.js";
+import mergeNodeData from "./mergeNodeData.js";
+import setNodeGeometry from "./setNodeGeometry.js";
+import setNodeParent from "./setNodeParent.js";
 
 import type {
   CommandHandler,
@@ -24,11 +27,17 @@ type HandlerMap = {
 export const HANDLERS: HandlerMap = {
   CREATE_NODES: createNodes.handler,
   DELETE_NODES: deleteNodes.handler,
+  MERGE_NODE_DATA: mergeNodeData.handler,
+  SET_NODE_GEOMETRY: setNodeGeometry.handler,
+  SET_NODE_PARENT: setNodeParent.handler,
 };
 
 export const COMMAND_META: Record<CanvasCommandType, CommandMeta> = {
   CREATE_NODES: createNodes.meta,
   DELETE_NODES: deleteNodes.meta,
+  MERGE_NODE_DATA: mergeNodeData.meta,
+  SET_NODE_GEOMETRY: setNodeGeometry.meta,
+  SET_NODE_PARENT: setNodeParent.meta,
 };
 
 export type {

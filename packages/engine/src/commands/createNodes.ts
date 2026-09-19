@@ -13,7 +13,7 @@
 // safety, delta-friendly output — is ported as-is.
 
 import { noop, type CommandDefinition } from "./types.js";
-import { createId, type CanvasCommand } from "@coresearch/shared";
+import { createUuid, type CanvasCommand } from "@coresearch/shared";
 
 import type { Node } from "@xyflow/react";
 
@@ -41,7 +41,7 @@ const createNodes: CommandDefinition<Cmd> = {
     const newNodes: Node[] = [];
 
     for (const input of cmd.nodes) {
-      const nodeId = input.id ?? createId("node");
+      const nodeId = input.id ?? createUuid();
       const data = (input.data ?? {}) as Record<string, unknown>;
 
       const node: Node = {

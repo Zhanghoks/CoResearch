@@ -53,6 +53,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@coresearch/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@coresearch/shared':
         specifier: workspace:*
         version: link:../../packages/shared
